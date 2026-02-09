@@ -1,13 +1,18 @@
 #interfaz Compilador Ruby
 import tkinter as tk
-from tkinter import ttk, messagebox, END
+from tkinter import ttk, messagebox, END, filedialog
+import validaciones as validar
+import os
 
 class Compilador(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Compilador Ruby")
+        self.title("Compilador Ruby - Nuevo Archivo")
         self.geometry("900x700")
         self.minsize(800, 600)
+
+        self.ruta_actual = None
+        self.nombre_archivo = None
 
         self.barra_menu()   #crea el menú de la aplicación
 
@@ -77,14 +82,59 @@ class Compilador(tk.Tk):
 
 
     def nuevo_archivo(self):
-        messagebox.showinfo("Nuevo Archivo", "Función para crear un nuevo archivo.")
+        if self.bloque_codigo.get('1.0', END).strip():  #verifica si el bloque de código no está vacío
+            if messagebox.askyesno("Nuevo Archivo", "¿Deseas guardar el archivo actual?"):
+                self.guardar_archivo() #confirma con el usuario si desea guardar el archivo abierto
+        
+        self.bloque_codigo.delete('1.0', END)   #borra el contenido del bloque de código
+        self.ruta_actual = None                         #modifica el titulo, ruta y nombre del archivo
+        self.nombre_archivo = None
+        self.title("Compilador Ruby - Nuevo Archivo")
+
+        self.actualizar_numeros() #actualiza los números de lpineas
 
     def abrir_archivo(self):
-        messagebox.showinfo("Abrir Archivo", "Función para abrir un archivo existente.")
+        if self.bloque_codigo.get('1.0', END).strip():  #verifica si el bloque de código no está vacío
+            if messagebox.askyesno("Abrir Archivo", "¿Deseas guardar el archivo actual?"):
+                self.guardar_archivo() #confirma con el usuario si desea guardar el archivo abierto
 
-    def guardar_archivo(self):
-        messagebox.showinfo("Guardar Archivo", "Función para guardar el archivo actual.")
-    
+        ruta = filedialog.askopenfilename( #pregunta cuál archivo abrir
+            filetypes=[("Text files", "*.txt")]
+        )
+        if not ruta:
+            return  #el usuario canceló el diálogo de apertura
+        try:
+            with open(ruta, 'r', encoding='utf-8') as archivo:
+                contenido = archivo.read()
+        except Exception as e:
+            messagebox.showerror("Error al Abrir Archivo", f"No se pudo abrir el archivo:\n{e}")
+            return
+        
+        self.bloque_codigo.delete('1.0', END) #borra el contenido del bloque de código
+        self.bloque_codigo.insert('1.0', contenido) #inserta el contenido del archivo en el bloque de código
+        self.ruta_actual = ruta     #modifica el titulo, ruta y nombre del archivo
+        self.nombre_archivo = os.path.basename(ruta)
+        self.title(f"Compilador Ruby - {self.nombre_archivo}")
+        self.actualizar_numeros() #actualiza los números de línea
+
+    def guardar_archivo(self): #funcion para guardar el archivo
+        if not self.nombre_archivo or not self.ruta_actual:
+            ruta = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt")]
+            )
+            if not ruta:
+                return  #el usuario canceló el diálogo de guardado
+            self.ruta_actual = ruta
+
+        contenido = self.bloque_codigo.get('1.0', END)
+        with open(self.ruta_actual, 'w', encoding='utf-8') as archivo:
+            archivo.write(contenido)
+        self.nombre_archivo = os.path.basename(self.ruta_actual)
+        self.title(f"Compilador Ruby - {self.nombre_archivo}")
+        messagebox.showinfo("Archivo Guardado", f"Archivo guardado exitosamente en:\n{self.ruta_actual}")
+
+
     def limpiar_archivo(self):
         self.bloque_codigo.delete('1.0', END)
         self.actualizar_numeros()
