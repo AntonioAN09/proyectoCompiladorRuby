@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, END, filedialog
 import validaciones as validar
 import os
+import lexico as lex
+import re
 
 class Compilador(tk.Tk):
     def __init__(self):
@@ -33,6 +35,10 @@ class Compilador(tk.Tk):
         #crear el bloque de código
         self.bloque_codigo = tk.Text(editor_frame, wrap=tk.NONE, font=("Consolas", 12))
         self.bloque_codigo.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Configurar tags para resaltar errores
+        self.bloque_codigo.tag_config("error", background="#ffcccc", underline=True, foreground="#cc0000")
+        self.bloque_codigo.tag_config("error_bg", background="#ffe6e6")
 
         #crear scroll para el bloque de código
         scrollbar = tk.Scrollbar(editor_frame, command=self.bloque_codigo.yview)
@@ -78,6 +84,12 @@ class Compilador(tk.Tk):
         menu_editar.add_command(label="Rehacer")
         menu_editar.add_command(label="Buscar")
         menu_editar.add_command(label="Reemplazar")
+        menu_compilador = tk.Menu(barra_menu, tearoff=0)
+        barra_menu.add_cascade(label="Compilador", menu=menu_compilador)
+        menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
+        # menu_terminal = tk.Menu(barra_menu, tearoff=0)
+        # barra_menu.add_cascade(label="Terminal", menu=menu_terminal)
+        # menu_terminal.add_command(label="Limpiar Terminal", command=lambda: self.salida.config(state='normal') and self.salida.delete('1.0', END) and self.salida.config(state='disabled'))
 
 
 
@@ -134,10 +146,76 @@ class Compilador(tk.Tk):
         self.title(f"Compilador Ruby - {self.nombre_archivo}")
         messagebox.showinfo("Archivo Guardado", f"Archivo guardado exitosamente en:\n{self.ruta_actual}")
 
+    def limpiar_errores_visuales(self): #función para limpiar los errores visuales del bloque de código
+        self.bloque_codigo.tag_remove("error", "1.0", tk.END)
+        self.bloque_codigo.tag_remove("error_bg", "1.0", tk.END)
+    
+    def marcar_linea_error(self, numero_linea):
+        inicio = f"{numero_linea}.0"
+        fin = f"{numero_linea}.end"
+        self.bloque_codigo.tag_add("error_bg", inicio, fin)
+        #añade un marcador al inicio de la línea
+        self.bloque_codigo.tag_add("error", inicio, f"{numero_linea}.1")
+
+    def analizar_lexico(self):
+        #limpiar errores visuales anteriores
+        self.limpiar_errores_visuales()
+        
+        codigo = self.bloque_codigo.get('1.0', END).strip()
+        if not codigo:
+            self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
+            return
+        
+        #validar aperturas de cierre de paréntesis, llaves y corchetes
+        es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
+        if not es_valido:
+            self.escribir_salida(f"ERROR: {mensaje_error}")
+            self.marcar_linea_error(linea_error)
+        
+        self.escribir_salida("Análisis léxico completado exitosamente.")
+        try:
+            numeroLinea = 0
+            self.escribir_salida("-" * 65)
+            lineas_con_error = []
+            
+            for linea in codigo.split('\n'):
+                numeroLinea += 1
+                linea = linea.rstrip()
+                tokens = lex.tokenizar(linea)
+                
+                for token in tokens:
+                    categoria, descripcion = lex.clasificarToken(token)
+                    
+                    self.escribir_salida(f"'{token}':".ljust(15) + f" | {categoria:<20} | {descripcion}")
+                    
+                    if lex.verificarDuplicado(token, categoria, lex.tokensEncontrados):
+                        self.escribir_salida(f"ERROR: Variable '{token}' duplicada (Línea {numeroLinea})")
+                        lineas_con_error.append(numeroLinea)
+                    
+                    if categoria == "invalido":
+                        lineas_con_error.append(numeroLinea)
+                        if re.match(r'^\d', token):
+                            self.escribir_salida(f"ERROR: Identificador '{token}' no puede comenzar con número (Línea {numeroLinea})")
+                        else:
+                            self.escribir_salida(f"ERROR: Token '{token}' contiene caracteres inválidos (Línea {numeroLinea})")
+            
+            #marca todas las líneas con errores
+            for linea_num in lineas_con_error:
+                self.marcar_linea_error(linea_num)
+
+        except Exception as e:
+            self.escribir_salida(f"Error al analizar el código: {e}")
 
     def limpiar_archivo(self):
+        self.limpiar_errores_visuales()
         self.bloque_codigo.delete('1.0', END)
         self.actualizar_numeros()
+        self.salida.config(state='normal')
+        self.salida.delete('1.0', END)
+        self.salida.config(state='disabled')
+        self.ruta_actual = None
+        self.nombre_archivo = None
+        self.title("Compilador Ruby - Nuevo Archivo")
 
     def sincronizar_scroll(self, scrollbar, *args):#función para sincronziar el scroll
         scrollbar.set(*args)
