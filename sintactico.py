@@ -64,19 +64,22 @@ class TreeNode: #clase para representar los nodos del arbol
     
     def print_tree(self, level=0):#función para imprimir el arbol
         indent = "  " * level
+        result = ""
         
         if self.right: #imprime el hijo derecho
-            self.right.print_tree(level + 1)
+            result += self.right.print_tree(level + 1)
         
         if self.token.type == Token.Type.Numero: #imprime el valor del número si el token es un número
-            print(f"{indent}Número: {self.token.value}")
+            result += f"{indent}Número: {self.token.value}\n"
         else:
-            print(f"{indent}Operador: {self.token.value}")
+            result += f"{indent}Operador: {self.token.value}\n"
         
         if self.left: #imprime el hijo izquierdo
-            self.left.print_tree(level + 1)
+            result += self.left.print_tree(level + 1)
+        
+        return result
 
-class Parser: #clae para el parseo
+class Parser: #clase para el parseo
     def __init__(self, lexer):
         self.lexer = lexer
         self.token_actual = self.lexer.next_token()
@@ -129,18 +132,3 @@ class Parser: #clae para el parseo
             self.token_actual = self.lexer.next_token()
         else:
             raise Exception(f"Token inesperado: {self.token_actual.type}, se esperaba: {token_type}")
-        
-if __name__ == "__main__":
-    expresion1 = "9*4/5-7+1*3+2"
-    expresion2 = "(3+5)*2"
-    expresion3 = "10/(2+3)"
-    expresion4 = "7-4*2"
-    expresion5 = "8/(4-2)"
-    print(f"\nExpresión: {expresion3}")
-    print("\nÁrbol Sintáctico:")
-    
-    lexer = Lexer(expresion3)
-    parser = Parser(lexer)
-    arbol_sintactico = parser.parse()
-    arbol_sintactico.print_tree()
-    

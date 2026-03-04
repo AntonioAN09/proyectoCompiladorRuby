@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, END, filedialog
 import validaciones as validar
 import os
 import lexico as lex
+import sintactico as sintax
 import re
 
 class Compilador(tk.Tk):
@@ -17,6 +18,7 @@ class Compilador(tk.Tk):
         self.nombre_archivo = None
 
         self.barra_menu()   #crea el menú de la aplicación
+        self.barra_botones() #crea la barra con botones a la derecha
 
         # PanedWindow para dividir editor y salida
         paned = ttk.PanedWindow(self, orient=tk.VERTICAL)
@@ -87,10 +89,24 @@ class Compilador(tk.Tk):
         menu_compilador = tk.Menu(barra_menu, tearoff=0)
         barra_menu.add_cascade(label="Compilador", menu=menu_compilador)
         menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
-        # menu_terminal = tk.Menu(barra_menu, tearoff=0)
-        # barra_menu.add_cascade(label="Terminal", menu=menu_terminal)
-        # menu_terminal.add_command(label="Limpiar Terminal", command=lambda: self.salida.config(state='normal') and self.salida.delete('1.0', END) and self.salida.config(state='disabled'))
+        menu_compilador.add_command(label="Analizar Sintáctico", command=self.analizar_sintactico)
+        menu_compilador.add_command(label="Analizar Semántico")
 
+    def barra_botones(self):
+        #frame para la barra de botones (al mismo nivel del menú)
+        barra = tk.Frame(self, bg='#f0f0f0')
+        barra.pack(side=tk.TOP, fill=tk.X, padx=0, pady=0)
+        
+        #menubutton que actúa como dropdown con ícono de triángulo (play)
+        menubutton = tk.Menubutton(barra, text="▶", bg='#f0f0f0', 
+                                   relief=tk.RAISED, bd=1, padx=8, pady=3, font=("Arial", 12))
+        menubutton.pack(side=tk.RIGHT, padx=5, pady=3)
+        
+        #menú desplegable para el botón
+        menu = tk.Menu(menubutton, tearoff=0)
+        menubutton.config(menu=menu)
+        menu.add_command(label="Compilar")
+        menu.add_command(label="Ejecutar")
 
 
     def nuevo_archivo(self):
@@ -206,6 +222,26 @@ class Compilador(tk.Tk):
         except Exception as e:
             self.escribir_salida(f"Error al analizar el código: {e}")
 
+    def analizar_sintactico(self):
+        self.limpiar_errores_visuales()
+        self.limpiar_salida()
+
+        codigo = self.bloque_codigo.get('1.0', END).strip()
+        if not codigo:
+            self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
+            return
+        try:
+            self.escribir_salida("Análisis sintáctico completado exitosamente.")
+            self.escribir_salida("-" * 65)
+            lexer = sintax.Lexer(codigo)
+            parser = sintax.Parser(lexer)
+            arbol = parser.parse()
+            resultado = arbol.print_tree()
+            self.escribir_salida(resultado)
+        except Exception as e:
+            self.escribir_salida(f"Error al analizar el código: {e}")
+
+
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()
         self.bloque_codigo.delete('1.0', END)
@@ -237,6 +273,11 @@ class Compilador(tk.Tk):
         self.salida.config(state='normal')
         self.salida.insert(tk.END, texto + '\n')
         self.salida.see(tk.END)
+        self.salida.config(state='disabled')
+
+    def limpiar_salida(self): #función para limpiar el panel de salida
+        self.salida.config(state='normal')
+        self.salida.delete('1.0', tk.END)
         self.salida.config(state='disabled')
 
 if __name__ == "__main__":
