@@ -5,6 +5,7 @@ import validaciones as validar
 import os
 import lexico as lex
 import sintactico as sintax
+import semantico as sem
 import re
 
 class Compilador(tk.Tk):
@@ -90,7 +91,7 @@ class Compilador(tk.Tk):
         barra_menu.add_cascade(label="Compilador", menu=menu_compilador)
         menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
         menu_compilador.add_command(label="Analizar Sintáctico", command=self.analizar_sintactico)
-        menu_compilador.add_command(label="Analizar Semántico")
+        menu_compilador.add_command(label="Analizar Semántico", command=self.analizar_semantico)
 
     def barra_botones(self):
         #frame para la barra de botones (al mismo nivel del menú)
@@ -132,7 +133,7 @@ class Compilador(tk.Tk):
         if not ruta:
             return  #el usuario canceló el diálogo de apertura
         try:
-            with open(ruta, 'r', encoding='utf-8') as archivo:
+            with open(ruta, 'r', encoding='utf-8-sig') as archivo:
                 contenido = archivo.read()
         except Exception as e:
             messagebox.showerror("Error al Abrir Archivo", f"No se pudo abrir el archivo:\n{e}")
@@ -156,7 +157,7 @@ class Compilador(tk.Tk):
             self.ruta_actual = ruta
 
         contenido = self.bloque_codigo.get('1.0', END)
-        with open(self.ruta_actual, 'w', encoding='utf-8') as archivo:
+        with open(self.ruta_actual, 'w', encoding='utf-8-sig') as archivo:
             archivo.write(contenido)
         self.nombre_archivo = os.path.basename(self.ruta_actual)
         self.title(f"Compilador Ruby - {self.nombre_archivo}")
@@ -176,6 +177,7 @@ class Compilador(tk.Tk):
     def analizar_lexico(self):
         #limpiar errores visuales anteriores
         self.limpiar_errores_visuales()
+        self.limpiar_salida()
         
         codigo = self.bloque_codigo.get('1.0', END).strip()
         if not codigo:
@@ -233,14 +235,44 @@ class Compilador(tk.Tk):
         try:
             self.escribir_salida("Análisis sintáctico completado exitosamente.")
             self.escribir_salida("-" * 65)
-            lexer = sintax.Lexer(codigo)
-            parser = sintax.Parser(lexer)
+            lista_tokens = lex.generar_tokens(codigo)
+            parser = sintax.Parser(lista_tokens)
             arbol = parser.parse()
             resultado = arbol.print_tree()
             self.escribir_salida(resultado)
         except Exception as e:
             self.escribir_salida(f"Error al analizar el código: {e}")
 
+    def analizar_semantico(self):
+        self.limpiar_errores_visuales()
+        self.limpiar_salida()
+
+        codigo = self.bloque_codigo.get('1.0', END).strip()
+        if not codigo:
+            self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
+            return
+        try:
+            lsita_tokens = lex.generar_tokens(codigo)
+            parser = sintax.Parser(lsita_tokens)
+            arbol = parser.parse()
+
+            analizador_semantico = sem.Semantico()
+            errores, tabla_simbolos = analizador_semantico.analizar(arbol)
+            self.escribir_salida("Análisis semántico completado.\n"+"-" * 65)
+            if errores:
+                self.escribir_salida("Errores semánticos encontrados:")
+                for error in errores:
+                    self.escribir_salida(error)
+            else:
+                self.escribir_salida("No se encontraron errores semánticos.")
+
+            self.escribir_salida("\nTabla de Símbolos:")
+            if not tabla_simbolos:
+                self.escribir_salida("La tabla de símbolos está vacía.")
+            for variable, tipo in tabla_simbolos.items():
+                self.escribir_salida(f"Variable: {variable} | Tipo: {tipo}")
+        except Exception as e:
+            self.escribir_salida(f"Error al analizar el código: {e}")
 
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()

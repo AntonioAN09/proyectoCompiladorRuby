@@ -1,25 +1,87 @@
 import re
 
 operadores = {
-    "+": "suma",
+    "+": "suma", #operadores aritméticos
     "-": "resta",
     "*": "multiplicacion",
     "/": "division",
-    "=": "asignacion",
+    "%": "modulo",
+    "**": "potenciacion",
+    "=": "asignacion",  #operadores de asignación
+    "+=": "asignacion suma",
+    "-=": "asignacion resta",
+    "/=": "asignacion division",
+    "*=": "asignacion multiplicacion",
+    "%=": "asignacion modulo",
+    "||=": "asignacion or",
+    "==": "igualdad",   #operadores de relación
+    "!=": "desigualdad",
     ">": "mayor que",
-    "<": "menor que"
+    "<": "menor que",
+    ">=": "mayor o igual que",
+    "<=": "menor o igual que",
+    "<=>": "operador de comparación combinado",
+    "===": "operador de comparación triple",
+    "&&": "operador lógico and",    #operadores lógicos
+    "||": "operador lógico or",
+    "!": "operador lógico not",
+    "and": "operador lógico and",
+    "or": "operador lógico or",
+    "not": "operador lógico not",
+    "..": "operador de rango",  #operadores de rango
+    "...": "operador de rango exclusivo",
+    "?": "operador ternario", #operadores especiales
+    ":": "operador de símbolo",
+    "::": "operador de resolución de ámbito",
+    ".": "operador de acceso a método o atributo",
+    "&": "operador de referencia",
+    "|": "operador de unión",
+    "^": "operador de intersección",
+    "~": "operador de complemento",
+    "<<": "operador de desplazamiento a la izquierda",
+    ">>": "operador de desplazamiento a la derecha",
+    "=>": "operador de hash rocket",
+    "#": "operador de comentario"
 }
 
-palabrasReservadas = {
-    "int": "entero",
-    "float": "flotante",
-    "string": "cadena",
-    "double": "doble",
-    "char": "caracter",
-    "if": "condicional",   
-    "else": "sino",
-    "main": "funcion principal",
-    "return": "retorno"
+palabrasReservadas = {  # palabras reservadas básicas de Ruby
+    "if": "condicional if",
+    "elsif": "condicional elsif",
+    "else": "condicional else",
+    "unless": "condicional unless",
+    "while": "bucle while",
+    "until": "bucle until",
+    "for": "bucle for",
+    "in": "pertenencia / iteración in",
+    "do": "inicio de bloque do",
+    "def": "definición de método",
+    "return": "retorno de método",
+    "end": "fin de bloque",
+    "class": "definición de clase",
+    "module": "definición de módulo",
+    "begin": "inicio de manejo de excepciones",
+    "rescue": "captura de excepciones",
+    "ensure": "bloque que siempre se ejecuta",
+    "case": "estructura case",
+    "when": "condición en case",
+    "then": "ejecución en condicional",
+    "break": "salir de bucle",
+    "next": "saltar a la siguiente iteración",
+    "redo": "repetir iteración actual",
+    "retry": "reintentar bloque",
+    "yield": "llamada a bloque asociado",
+    "super": "llamada al método de la superclase",
+    "self": "referencia al objeto actual",
+    "alias": "crear alias de método o variable",
+    "defined?": "verificar si algo está definido",
+    "and": "operador lógico and",
+    "or": "operador lógico or",
+    "not": "operador lógico not",
+    "true": "valor booleano verdadero",
+    "false": "valor booleano falso",
+    "nil": "valor nulo",
+    "__FILE__": "nombre del archivo actual",
+    "__LINE__": "número de línea actual"
 }
 
 simbolos = {
@@ -32,18 +94,40 @@ simbolos = {
     ";": "punto y coma",
     ",": "coma"
 }
+
+metodos = {
+    "puts": "método para imprimir en consola",
+    "print": "método para imprimir sin salto de línea",
+    "gets": "método para leer entrada del usuario",
+    "chomp": "método para eliminar el salto de línea al final de una cadena",
+    "to_i": "método para convertir a entero",
+    "to_s": "método para convertir a cadena",
+    "to_f": "método para convertir a flotante",
+    "length": "método para obtener la longitud de una cadena o arreglo",
+    "size": "método para obtener el tamaño de un arreglo",
+    "each": "método para iterar sobre elementos de un arreglo o hash",
+    "map": "método para transformar elementos de un arreglo",
+    "times": "método para ejecutar un bloque un número específico de veces",
+    "class": "método para obtener la clase de un objeto"
+}
+
 tokensEncontrados = []
 
 def validarIdentificador(token):
     patron = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
     return re.match(patron, token) is not None
 
+def identificarString(token):
+    patron = r'^"(?:\\.|[^"\\])*"$|^\'(?:\\.|[^\'\\])*\'$'
+    return re.match(patron, token) is not None
+
 def tokenizar(linea):
-    patron = r'[^\s(){}\[\];,=+\-*/]+|[(){}\[\];,=+\-*/]'
+    patron = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\*\*|\|\|=|===|==|!=|>=|<=|<=>|\+=|-=|\*=|/=|%=|\|\||&&|\.\.\.|\.\.|::|=>|<<|>>|[(){}\[\];,=+\-*/%?!:&|^~<>]|[a-zA-Z_]\w*|\d+'
     tokens = re.findall(patron, linea)
     return tokens
 
 def clasificarToken(token):
+    
     if token in palabrasReservadas:
         return "palabra reservada", palabrasReservadas[token]
 
@@ -53,11 +137,17 @@ def clasificarToken(token):
     if token in simbolos:
         return "simbolo", simbolos[token]
     
+    if token in metodos:
+        return "metodo", metodos[token]
+    
     if re.match(r'^\d+$', token):
         return "numero", "número"
     
     if validarIdentificador(token):
         return "identificador", "nombre de variable o función"
+    
+    if identificarString(token):
+        return "string", "cadena de texto"
     
     return "invalido", "token no reconocido"
 
@@ -70,3 +160,33 @@ def verificarDuplicado(token, categoria, lista):
             return False
     return False
 
+class Token: #clase para representar los tokens con su tipo y valor
+    def __init__(self, type, value):
+        self.type = type
+        self.value = value
+    
+    def __repr__(self):
+        return f"Token(type='{self.type}', value='{self.value}')"
+    
+def generar_tokens(codigo):
+    tokens_parser=[]
+    for linea in codigo.splitlines():
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+
+        tokens_crudos = tokenizar(linea)
+        for t in tokens_crudos:
+            categoria, descripcion= clasificarToken(t)
+            if categoria == "numero": tipo = "Numero"
+            elif categoria == "simbolo": tipo = "Simbolo"
+            elif categoria == "metodo": tipo = "Metodo"
+            elif categoria == "identificador": tipo = "Identificador"
+            elif categoria == "palabra reservada": tipo = "PalabraReservada"
+            elif categoria == "operador": tipo = "Operador"
+            elif categoria == "string": tipo = "String"
+            else: tipo = "Invalido"
+
+            tokens_parser.append(Token(tipo, t))
+    tokens_parser.append(Token("Fin", ""))
+    return tokens_parser

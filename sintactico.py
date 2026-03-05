@@ -1,58 +1,5 @@
-class Token: #clase para definir los tokens que el lexer va a generar, con un tipo y un valor
-    class Type:
-        Numero = 'Numero'
-        Suma = 'Suma'
-        Resta = 'Resta'
-        Multiplica = 'Multiplica'
-        Divide = 'Divide'
-        ParentesisAbre = 'ParentesisAbre'
-        ParentesisCierra = 'ParentesisCierra'
-        Fin = 'Fin'
-        Invalido = 'Invalido'
+from lexico import Token
 
-    def __init__(self, type, value): #constructor para inicializar el token con su tipo y valor
-        self.type = type
-        self.value = value
-
-class Lexer: #clase para analizar la cadena de entrada y generar tokens
-    def __init__(self, origen):
-        self.origen = origen
-        self.index = 0
-    
-    def next_token(self): #función para obtener el siguiente token de la cadena de entrada
-        while self.index < len(self.origen) and self.origen[self.index].isspace():
-            self.index += 1 #ignorar espacios en blanco
-        
-        if self.index >= len(self.origen):  #verificar si se ha llegado al final de la cadena de entrada
-            return Token(Token.Type.Fin, "")
-        
-        entrada_actual = self.origen[self.index]
-        
-        if entrada_actual.isdigit(): #reconocer números
-            num = ""
-            while self.index < len(self.origen) and self.origen[self.index].isdigit():
-                num += self.origen[self.index]
-                self.index += 1
-            return Token(Token.Type.Numero, num)
-        
-        self.index += 1
-        
-        #reconocer operadores y paréntesis
-        if entrada_actual == '+':
-            return Token(Token.Type.Suma, entrada_actual)
-        elif entrada_actual == '-':
-            return Token(Token.Type.Resta, entrada_actual)
-        elif entrada_actual == '*':
-            return Token(Token.Type.Multiplica, entrada_actual)
-        elif entrada_actual == '/':
-            return Token(Token.Type.Divide, entrada_actual)
-        elif entrada_actual == '(':
-            return Token(Token.Type.ParentesisAbre, entrada_actual)
-        elif entrada_actual == ')':
-            return Token(Token.Type.ParentesisCierra, entrada_actual)
-        else:
-            return Token(Token.Type.Invalido, entrada_actual)
-        
 class TreeNode: #clase para representar los nodos del arbol
     def __init__(self, token):#constructor para inicializar el nodo con un token y referencias a los hijos izquierdo y derecho
         self.token = token
@@ -62,37 +9,100 @@ class TreeNode: #clase para representar los nodos del arbol
     def __repr__(self):#representación del nodo en string para facilitar la depuración
         return f"TreeNode({self.token.type}, {self.token.value})"
     
-    def print_tree(self, level=0):#función para imprimir el arbol
-        indent = "  " * level
-        result = ""
+    def print_tree(self, prefix="", is_left=True, is_root=True):#función para imprimir el arbol
+        resultado = ""
         
         if self.right: #imprime el hijo derecho
-            result += self.right.print_tree(level + 1)
-        
-        if self.token.type == Token.Type.Numero: #imprime el valor del número si el token es un número
-            result += f"{indent}Número: {self.token.value}\n"
+            new_prefix = prefix + ("│   " if is_left and not is_root else "    ")
+            resultado += self.right.print_tree(new_prefix, False, False)
+
+        if is_root:
+            resultado += f"Raiz ── {self.token.value}\n"
         else:
-            result += f"{indent}Operador: {self.token.value}\n"
-        
+            conector = "└── " if is_left else "┌── "
+            resultado += f"{prefix}{conector}{self.token.value}\n"
+    
         if self.left: #imprime el hijo izquierdo
-            result += self.left.print_tree(level + 1)
+            new_prefix = prefix + ("    " if is_left and not is_root else "│   ")
+            resultado += self.left.print_tree(new_prefix, True, False)
         
-        return result
+        return resultado
 
 class Parser: #clase para el parseo
-    def __init__(self, lexer):
-        self.lexer = lexer
-        self.token_actual = self.lexer.next_token()
+    def __init__(self, lista_tokens):
+        self.tokens = lista_tokens
+        self.posicion = 0
+        self.token_actual = self.tokens[self.posicion] if self.tokens else Token('Fin', "")
     
+    def next_token(self): #función para avanzar al siguiente token
+        self.posicion += 1
+        if self.posicion < len(self.tokens):
+            self.token_actual = self.tokens[self.posicion]
+        else:
+            self.token_actual = Token('Fin', "")
+        return self.token_actual
+
+    def eat(self, token_type, token_value=None): #función para consumir un token esperado, verificando su tipo y valor
+        if self.token_actual.type == token_type and (token_value is None or self.token_actual.value == token_value):
+            self.next_token()
+        else:
+            esperado = token_value if token_value else token_type
+            raise Exception(f"Token inseperado: {self.token_actual.value}, se esperaba: {esperado}")
+
     def parse(self): #función principal para iniciar el proceso de parseo
-        return self.expr()
-    
-    def expr(self): #procesa suma y resta (menor precedencia)
-        node = self.termino()
+        nodo_raiz = self.instruccion()
+
+        while self.token_actual.type != 'Fin': #mientras no se alcance el final de los tokens, se siguen procesando instrucciones
+            siguiente_inst = self.instruccion() #procesa la siguiente instrucción y actualiza el nodo raíz
+            if siguiente_inst:
+                conexion = TreeNode(Token('Conector', '->'))
+                conexion.left = nodo_raiz
+                conexion.right = siguiente_inst
+                nodo_raiz = conexion
+
+        return nodo_raiz #devuelve el nodo raíz del árbol 
+
+    def instruccion(self): #procesa una instrucción
+        if self.token_actual.type == 'Identificador':
+            posicion_guardada = self.posicion #guarda la posición actual
+            self.next_token()
+            es_asignacion = (self.token_actual.type == 'Operador' and self.token_actual.value == '=')
+
+            self.posicion = posicion_guardada #restaura la posición guardada
+            self.token_actual = self.tokens[self.posicion] #restaura el token actual
+
+            if es_asignacion:
+                return self.asignacion()
+            else:
+                return self.expr() #si no es una asignación, se trata de una expresión
         
-        while self.token_actual.type in (Token.Type.Suma, Token.Type.Resta):
+        elif self.token_actual.type =='Metodo':
+            token_metodo = self.token_actual
+            self.eat('Metodo')
+            nodo_metodo = TreeNode(token_metodo)
+
+            if self.token_actual.type not in ['Fin', 'PalabraReservada', 'Metodo']:
+                nodo_metodo.left = self.expr()
+            return nodo_metodo
+        
+        return self.expr() #si no es un identificador ni un método, se trata de una expresión
+
+    def asignacion(self): #procesa una asignación
+        nodo_id = TreeNode(self.token_actual)
+        self.eat('Identificador')
+        nodo_asignacion = TreeNode(self.token_actual)
+        self.eat('Operador', '=')
+        nodo_asignacion.left = nodo_id #el lado izquierdo de la asignación es el identificador
+        nodo_asignacion.right = self.expr() #el lado derecho de la asignación es una expresión
+        return nodo_asignacion
+         
+
+    def expr(self): #procesa suma y resta 
+        node = self.termino() #comienza con el primer término
+        
+        while self.token_actual.type == 'Operador' and self.token_actual.value in ('+', '-'):
             token = self.token_actual
-            self.eat(token.type)
+            self.eat('Operador')
             new_node = TreeNode(token)
             new_node.left = node
             new_node.right = self.termino() #hijo derecho es el siguiente término
@@ -103,9 +113,9 @@ class Parser: #clase para el parseo
     def termino(self): #procesa multiplicación y división, creando nodos para cada operador y conectándolos con los factores correspondientes
         node = self.factor() #comienza con el primer factor
         
-        while self.token_actual.type in (Token.Type.Multiplica, Token.Type.Divide):
+        while self.token_actual.type == 'Operador' and self.token_actual.value in ('*', '/'):
             token = self.token_actual
-            self.eat(token.type)
+            self.eat('Operador')
             new_node = TreeNode(token)
             new_node.left = node
             new_node.right = self.factor() #hijo derecho es el siguiente factor
@@ -113,22 +123,24 @@ class Parser: #clase para el parseo
         
         return node
     
-    def factor(self): #procesa números y expresiones entre parentesis
+    def factor(self): #funcion para procesar los tokens
         token = self.token_actual
         
-        if token.type == Token.Type.Numero:
-            self.eat(Token.Type.Numero)
+        if token.type == "Numero": #procesa un número creando un nodo para ese número
+            self.eat("Numero")
             return TreeNode(token)
-        elif token.type == Token.Type.ParentesisAbre:
-            self.eat(Token.Type.ParentesisAbre)
-            node = self.expr()  # expresión dentro de paréntesis
-            self.eat(Token.Type.ParentesisCierra)
+        elif token.type == "Identificador": #procesa un identificador creando un nodo para ese identificador
+            self.eat("Identificador")
+            return TreeNode(token)
+        elif token.type == "Simbolo" and token.value == "(": #procesa una expresión entre paréntesis creando un nodo para esa expresión
+            self.eat("Simbolo", "(")
+            node = self.expr()
+            self.eat("Simbolo", ")")
             return node
+        elif token.type == "String": #procesa una cadena de texto creando un nodo para esa cadena
+            self.eat("String")
+            return TreeNode(token)
         else:
-            raise Exception(f"Token inesperado: {token.type} con valor '{token.value}'")
-
-    def eat(self, token_type): #verifica que el token actual sea del tipo esperado y avanza al siguiente token
-        if self.token_actual.type == token_type:
-            self.token_actual = self.lexer.next_token()
-        else:
-            raise Exception(f"Token inesperado: {self.token_actual.type}, se esperaba: {token_type}")
+            valor_error = self.token_actual.value
+            self.next_token() #avanza al siguiente token para evitar un bucle infinito
+            raise Exception(f"Sintaxis invalida en token: {valor_error}")
