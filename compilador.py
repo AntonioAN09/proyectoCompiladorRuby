@@ -184,13 +184,9 @@ class Compilador(tk.Tk):
             self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
             return
         
-        #validar aperturas de cierre de paréntesis, llaves y corchetes
-        es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
-        if not es_valido:
-            self.escribir_salida(f"ERROR: {mensaje_error}")
-            self.marcar_linea_error(linea_error)
-        
         self.escribir_salida("Análisis léxico completado exitosamente.")
+        #validar aperturas de cierre de paréntesis, llaves y corchetes
+        
         try:
             numeroLinea = 0
             self.escribir_salida("-" * 65)
@@ -198,24 +194,21 @@ class Compilador(tk.Tk):
             
             for linea in codigo.split('\n'):
                 numeroLinea += 1
-                linea = linea.rstrip()
+                linea = linea.strip()
+                if not linea or linea.startswith("#"):
+                    continue
+
                 tokens = lex.tokenizar(linea)
-                
                 for token in tokens:
                     categoria, descripcion = lex.clasificarToken(token)
-                    
                     self.escribir_salida(f"'{token}':".ljust(15) + f" | {categoria:<20} | {descripcion}")
-                    
-                    if lex.verificarDuplicado(token, categoria, lex.tokensEncontrados):
-                        self.escribir_salida(f"ERROR: Variable '{token}' duplicada (Línea {numeroLinea})")
-                        lineas_con_error.append(numeroLinea)
                     
                     if categoria == "invalido":
                         lineas_con_error.append(numeroLinea)
                         if re.match(r'^\d', token):
-                            self.escribir_salida(f"ERROR: Identificador '{token}' no puede comenzar con número (Línea {numeroLinea})")
+                            self.escribir_salida(f"Error: Identificador '{token}' no puede comenzar con número (Línea {numeroLinea})")
                         else:
-                            self.escribir_salida(f"ERROR: Token '{token}' contiene caracteres inválidos (Línea {numeroLinea})")
+                            self.escribir_salida(f"Error: Token '{token}' contiene caracteres inválidos (Línea {numeroLinea})")
             
             #marca todas las líneas con errores
             for linea_num in lineas_con_error:
@@ -231,6 +224,11 @@ class Compilador(tk.Tk):
         codigo = self.bloque_codigo.get('1.0', END).strip()
         if not codigo:
             self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
+            return
+        es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
+        if not es_valido:
+            self.escribir_salida(f"Error de sintaxis: {mensaje_error} (Línea {linea_error})")
+            self.marcar_linea_error(linea_error)
             return
         try:
             self.escribir_salida("Análisis sintáctico completado exitosamente.")
@@ -251,6 +249,11 @@ class Compilador(tk.Tk):
         if not codigo:
             self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
             return
+        es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
+        if not es_valido:
+            self.escribir_salida(f"Error: {mensaje_error} (Línea {linea_error})")
+            self.marcar_linea_error(linea_error)
+            return
         try:
             lsita_tokens = lex.generar_tokens(codigo)
             parser = sintax.Parser(lsita_tokens)
@@ -259,10 +262,13 @@ class Compilador(tk.Tk):
             analizador_semantico = sem.Semantico()
             errores, tabla_simbolos = analizador_semantico.analizar(arbol)
             self.escribir_salida("Análisis semántico completado.\n"+"-" * 65)
-            if errores:
+            
+            if errores: #marca los errores si los encontró
                 self.escribir_salida("Errores semánticos encontrados:")
-                for error in errores:
-                    self.escribir_salida(error)
+                for mensaje, linea in errores:
+                    self.escribir_salida(f"Línea {linea} | {mensaje}")
+                    if linea > 0:
+                        self.marcar_linea_error(linea)
             else:
                 self.escribir_salida("No se encontraron errores semánticos.")
 

@@ -50,17 +50,21 @@ class Parser: #clase para el parseo
             raise Exception(f"Token inseperado: {self.token_actual.value}, se esperaba: {esperado}")
 
     def parse(self): #función principal para iniciar el proceso de parseo
+        return self.bolque_instrucciones(parse_principal=True)
+
+    def bolque_instrucciones(self, parse_principal=False): #función para procesar un bloque de instrucciones
         nodo_raiz = self.instruccion()
 
-        while self.token_actual.type != 'Fin': #mientras no se alcance el final de los tokens, se siguen procesando instrucciones
-            siguiente_inst = self.instruccion() #procesa la siguiente instrucción y actualiza el nodo raíz
+        while self.token_actual.type != 'Fin':
+            if not parse_principal and self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['end', 'else', 'elsif']:
+                break
+            siguiente_inst = self.instruccion()
             if siguiente_inst:
                 conexion = TreeNode(Token('Conector', '->'))
                 conexion.left = nodo_raiz
                 conexion.right = siguiente_inst
                 nodo_raiz = conexion
-
-        return nodo_raiz #devuelve el nodo raíz del árbol 
+        return nodo_raiz
 
     def instruccion(self): #procesa una instrucción
         if self.token_actual.type == 'Identificador':
@@ -85,7 +89,38 @@ class Parser: #clase para el parseo
                 nodo_metodo.left = self.expr()
             return nodo_metodo
         
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'if':
+            return self.condicional_if()
+        
         return self.expr() #si no es un identificador ni un método, se trata de una expresión
+
+    def condicional_if(self): #procesa una estructura condicional if
+        token_if = self.token_actual
+        self.eat('PalabraReservada', 'if')
+        nodo_if = TreeNode(token_if)
+        nodo_if.left = self.condicion()
+
+        nodo_ramas = TreeNode(Token('Conector', 'Ramas'))
+        nodo_ramas.left = self.bolque_instrucciones()
+        #procesa las ramas elsif
+        if self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'else':
+            self.eat('PalabraReservada', 'else')
+            nodo_ramas.right = self.bolque_instrucciones()
+
+        self.eat('PalabraReservada', 'end')
+        nodo_if.right = nodo_ramas
+        return nodo_if
+    
+    def condicion(self): #procesa una condición
+        nodo = self.expr() #comienza con una expresión
+        if self.token_actual.type == 'Operador' and self.token_actual.value in ('==', '!=', '<', '>', '<=', '>='):
+            token_op = self.token_actual
+            self.eat('Operador')
+            new_nodo = TreeNode(token_op)
+            new_nodo.left = nodo
+            new_nodo.right = self.expr() #hijo derecho es la siguiente expresión
+            nodo = new_nodo
+        return nodo
 
     def asignacion(self): #procesa una asignación
         nodo_id = TreeNode(self.token_actual)

@@ -151,31 +151,25 @@ def clasificarToken(token):
     
     return "invalido", "token no reconocido"
 
-def verificarDuplicado(token, categoria, lista):
-    if categoria == "identificador":
-        if token in lista:
-            return True
-        else:
-            lista.append(token)
-            return False
-    return False
-
 class Token: #clase para representar los tokens con su tipo y valor
-    def __init__(self, type, value):
+    def __init__(self, type, value, linea=0):
         self.type = type
         self.value = value
-    
+        self.linea = linea
+
     def __repr__(self):
-        return f"Token(type='{self.type}', value='{self.value}')"
+        return f"Token(type='{self.type}', value='{self.value}', linea={self.linea})"
     
 def generar_tokens(codigo):
     tokens_parser=[]
+    numero_linea = 1 #contador para la linea actual
     for linea in codigo.splitlines():
-        linea = linea.strip()
+        lin = linea.strip()
         if not linea or linea.startswith("#"):
+            numero_linea += 1
             continue
 
-        tokens_crudos = tokenizar(linea)
+        tokens_crudos = tokenizar(lin)
         for t in tokens_crudos:
             categoria, descripcion= clasificarToken(t)
             if categoria == "numero": tipo = "Numero"
@@ -187,6 +181,8 @@ def generar_tokens(codigo):
             elif categoria == "string": tipo = "String"
             else: tipo = "Invalido"
 
-            tokens_parser.append(Token(tipo, t))
-    tokens_parser.append(Token("Fin", ""))
+            tokens_parser.append(Token(tipo, t, linea=numero_linea))
+        numero_linea += 1
+        
+    tokens_parser.append(Token("Fin", "", linea=numero_linea))
     return tokens_parser
