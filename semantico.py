@@ -24,19 +24,24 @@ class Semantico:
             return None
         elif tipo_token == 'Numero': #regla de numero: <valor> = <número>
             return 'Número'
-        elif tipo_token == 'String': #regla de string: <valor> = <string>
-            return 'String'
+        elif tipo_token == 'Cadena': #regla de string: <valor> = <string>
+            return 'Cadena'
         elif tipo_token == 'Identificador': #regla de identificador: <id> en tabla de simbolos
             if valor not in self.tabla_simbolos:
                 self.errores.append((f"Error semántico: Variable '{valor}' no declarada.", linea))
                 return None
             return self.tabla_simbolos[valor]
         elif tipo_token == 'Operador' and valor == '=': #regla de asignación: <id> = <expresión>
-            nombre_var = nodo.left.token.value
+            nodo_izq = nodo.left
             tipo_der = self.visitar(nodo.right)
+            if nodo_izq.token.type != 'Identificador':
+                self.errores.append((f"Error semántico: No se puede tener <expr> = <valor>, debe ser <id> = <expr>.", linea))
+                return None
+            nombre_variable = nodo_izq.token.value
             if tipo_der != 'Error':
-                self.tabla_simbolos[nombre_var] = tipo_der
-            return tipo_der
+                self.tabla_simbolos[nombre_variable] = tipo_der
+                return tipo_der
+
         elif tipo_token == 'Operador' and valor in ('+', '-', '*', '/'): #regla de operación aritmética: <expresión> <operador> <expresión>
             tipo_izq = self.visitar(nodo.left)
             tipo_der = self.visitar(nodo.right)
@@ -67,6 +72,9 @@ class Semantico:
                 self.errores.append((f"Error semántico: Condición del 'if' debe ser de tipo 'Booleano', no '{tipo_condicion}'.", linea))
 
             self.visitar(nodo.right)
+            return None
+        elif tipo_token == 'PalabraReservada' and valor == 'else': #regla de else: else <bloque_instrucciones>
+            self.visitar(nodo.left) #visitar el bloque de instrucciones del else
             return None
 
         return None

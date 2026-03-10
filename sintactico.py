@@ -47,7 +47,8 @@ class Parser: #clase para el parseo
             self.next_token()
         else:
             esperado = token_value if token_value else token_type
-            raise Exception(f"Token inseperado: {self.token_actual.value}, se esperaba: {esperado}")
+            linea = getattr(self.token_actual, 'linea', 0) #obtener la linea del token actual para el mensaje de error
+            raise Exception(f"Linea {linea} | Token inseperado: {self.token_actual.value}, se esperaba: {esperado}")
 
     def parse(self): #función principal para iniciar el proceso de parseo
         return self.bolque_instrucciones(parse_principal=True)
@@ -67,7 +68,7 @@ class Parser: #clase para el parseo
         return nodo_raiz
 
     def instruccion(self): #procesa una instrucción
-        if self.token_actual.type == 'Identificador':
+        if self.token_actual.type in ['Identificador', 'Numero', 'Cadena']:
             posicion_guardada = self.posicion #guarda la posición actual
             self.next_token()
             es_asignacion = (self.token_actual.type == 'Operador' and self.token_actual.value == '=')
@@ -79,7 +80,7 @@ class Parser: #clase para el parseo
                 return self.asignacion()
             else:
                 return self.expr() #si no es una asignación, se trata de una expresión
-        
+            
         elif self.token_actual.type =='Metodo':
             token_metodo = self.token_actual
             self.eat('Metodo')
@@ -89,7 +90,7 @@ class Parser: #clase para el parseo
                 nodo_metodo.left = self.expr()
             return nodo_metodo
         
-        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'if':
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['if', 'else']:
             return self.condicional_if()
         
         return self.expr() #si no es un identificador ni un método, se trata de una expresión
@@ -123,11 +124,11 @@ class Parser: #clase para el parseo
         return nodo
 
     def asignacion(self): #procesa una asignación
-        nodo_id = TreeNode(self.token_actual)
-        self.eat('Identificador')
+        nodo_izq = TreeNode(self.token_actual)
+        self.eat(self.token_actual.type)
         nodo_asignacion = TreeNode(self.token_actual)
         self.eat('Operador', '=')
-        nodo_asignacion.left = nodo_id #el lado izquierdo de la asignación es el identificador
+        nodo_asignacion.left = nodo_izq #el lado izquierdo de la asignación es el identificador
         nodo_asignacion.right = self.expr() #el lado derecho de la asignación es una expresión
         return nodo_asignacion
          
@@ -169,13 +170,33 @@ class Parser: #clase para el parseo
             return TreeNode(token)
         elif token.type == "Simbolo" and token.value == "(": #procesa una expresión entre paréntesis creando un nodo para esa expresión
             self.eat("Simbolo", "(")
+            if self.token_actual.type == 'Simbolo' and self.token_actual.value == ')': #maneja el caso de paréntesis vacíos
+                self.eat("Simbolo", ")")
+                return TreeNode(Token("Parametros", "()")) #crea un nodo especial para paréntesis vacíos
             node = self.expr()
             self.eat("Simbolo", ")")
             return node
-        elif token.type == "String": #procesa una cadena de texto creando un nodo para esa cadena
-            self.eat("String")
+        elif token.type == 'Simbolo' and token.value == '[': #procesa una expresión entre corchetes creando un nodo para esa expresión
+            self.eat('Simbolo', '[')
+            if self.token_actual.type == 'Simbolo' and self.token_actual.value == ']': #maneja el caso de corchetes vacíos
+                self.eat('Simbolo', ']')
+                return TreeNode(Token("Arreglo", "[]")) #crea un nodo especial para corchetes vacíos
+            node = self.expr()
+            self.eat('Simbolo', ']')
+            return node
+        elif token.type == 'Simbolo' and token.value == '{': #procesa una expresión entre llaves creando un nodo para esa expresión
+            self.eat('Simbolo', '{')
+            if self.token_actual.type == 'Simbolo' and self.token_actual.value == '}': #maneja el caso de llaves vacías
+                self.eat('Simbolo', '}')
+                return TreeNode(Token("Bloque", "{}")) #crea un nodo especial para llaves vacías
+            node = self.expr()
+            self.eat('Simbolo', '}')
+            return node
+        elif token.type == "Cadena": #procesa una cadena de texto creando un nodo para esa cadena
+            self.eat("Cadena")
             return TreeNode(token)
         else:
             valor_error = self.token_actual.value
+            linea = getattr(self.token_actual, 'linea', 0) #obtener la linea del token actual para el mensaje de error
             self.next_token() #avanza al siguiente token para evitar un bucle infinito
-            raise Exception(f"Sintaxis invalida en token: {valor_error}")
+            raise Exception(f"Linea {linea} | Sintaxis invalida en token: {valor_error}")

@@ -140,14 +140,17 @@ def clasificarToken(token):
     if token in metodos:
         return "metodo", metodos[token]
     
+    if re.match(r'^\d+\.\d+$', token):
+        return "numero", "número flotante"
+    
     if re.match(r'^\d+$', token):
-        return "numero", "número"
+        return "numero", "número entero"
     
     if validarIdentificador(token):
         return "identificador", "nombre de variable o función"
     
     if identificarString(token):
-        return "string", "cadena de texto"
+        return "cadena", "cadena de texto"
     
     return "invalido", "token no reconocido"
 
@@ -178,7 +181,7 @@ def generar_tokens(codigo):
             elif categoria == "identificador": tipo = "Identificador"
             elif categoria == "palabra reservada": tipo = "PalabraReservada"
             elif categoria == "operador": tipo = "Operador"
-            elif categoria == "string": tipo = "String"
+            elif categoria == "cadena": tipo = "Cadena"
             else: tipo = "Invalido"
 
             tokens_parser.append(Token(tipo, t, linea=numero_linea))

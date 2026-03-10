@@ -92,6 +92,7 @@ class Compilador(tk.Tk):
         menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
         menu_compilador.add_command(label="Analizar Sintáctico", command=self.analizar_sintactico)
         menu_compilador.add_command(label="Analizar Semántico", command=self.analizar_semantico)
+        menu_compilador.add_command(label='Generar Código', command=self.generar_codigo)
 
     def barra_botones(self):
         #frame para la barra de botones (al mismo nivel del menú)
@@ -239,7 +240,13 @@ class Compilador(tk.Tk):
             resultado = arbol.print_tree()
             self.escribir_salida(resultado)
         except Exception as e:
-            self.escribir_salida(f"Error al analizar el código: {e}")
+            mensaje_error = str(e)
+            self.escribir_salida(f"Error sintáctico: {mensaje_error}")
+            match= re.search(r'Linea (\d+)', mensaje_error)
+            if match:
+                linea_num = int(match.group(1))
+                if linea_num > 0:
+                    self.marcar_linea_error(linea_num)
 
     def analizar_semantico(self):
         self.limpiar_errores_visuales()
@@ -278,8 +285,17 @@ class Compilador(tk.Tk):
             for variable, tipo in tabla_simbolos.items():
                 self.escribir_salida(f"Variable: {variable} | Tipo: {tipo}")
         except Exception as e:
-            self.escribir_salida(f"Error al analizar el código: {e}")
+            mensaje_error = str(e)
+            self.escribir_salida(f"Error: {mensaje_error}")
+            match= re.search(r'Linea (\d+)', mensaje_error)
+            if match:
+                linea_num = int(match.group(1))
+                if linea_num > 0:
+                    self.marcar_linea_error(linea_num)
 
+    def generar_codigo(self):
+        self.escribir_salida("Funcionalidad de generación de código aún no implementada.")
+        
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()
         self.bloque_codigo.delete('1.0', END)
