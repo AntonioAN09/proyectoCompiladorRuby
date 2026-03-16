@@ -71,7 +71,7 @@ class Parser: #clase para el parseo
         if self.token_actual.type in ['Identificador', 'Numero', 'Cadena']:
             posicion_guardada = self.posicion #guarda la posición actual
             self.next_token()
-            es_asignacion = (self.token_actual.type == 'Operador' and self.token_actual.value == '=')
+            es_asignacion = (self.token_actual.type == 'Operador' and self.token_actual.value in ['=', '+=', '-=', '*=', '/=', '%='])
 
             self.posicion = posicion_guardada #restaura la posición guardada
             self.token_actual = self.tokens[self.posicion] #restaura el token actual
@@ -90,8 +90,15 @@ class Parser: #clase para el parseo
                 nodo_metodo.left = self.expr()
             return nodo_metodo
         
-        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['if', 'else']:
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'if':
             return self.condicional_if()
+        
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'while':
+            return self.bucle_while()
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['True', 'False', 'false', 'true']:
+            token_booleano = self.token_actual
+            self.eat('PalabraReservada')
+            return TreeNode(token_booleano)
         
         return self.expr() #si no es un identificador ni un método, se trata de una expresión
 
@@ -112,6 +119,15 @@ class Parser: #clase para el parseo
         nodo_if.right = nodo_ramas
         return nodo_if
     
+    def bucle_while(self):
+        token = self.token_actual
+        self.eat('PalabraReservada', 'while')
+        nodo_while = TreeNode(token)
+        nodo_while.left = self.condicion()
+        nodo_while.right = self.bolque_instrucciones()
+        self.eat('PalabraReservada', 'end')
+        return nodo_while
+
     def condicion(self): #procesa una condición
         nodo = self.expr() #comienza con una expresión
         if self.token_actual.type == 'Operador' and self.token_actual.value in ('==', '!=', '<', '>', '<=', '>='):
@@ -126,12 +142,14 @@ class Parser: #clase para el parseo
     def asignacion(self): #procesa una asignación
         nodo_izq = TreeNode(self.token_actual)
         self.eat(self.token_actual.type)
+
+        token_operador = self.token_actual
         nodo_asignacion = TreeNode(self.token_actual)
-        self.eat('Operador', '=')
+        self.eat('Operador', token_operador.value)
         nodo_asignacion.left = nodo_izq #el lado izquierdo de la asignación es el identificador
         nodo_asignacion.right = self.expr() #el lado derecho de la asignación es una expresión
         return nodo_asignacion
-         
+
 
     def expr(self): #procesa suma y resta 
         node = self.termino() #comienza con el primer término
@@ -156,8 +174,23 @@ class Parser: #clase para el parseo
             new_node.left = node
             new_node.right = self.factor() #hijo derecho es el siguiente factor
             node = new_node
-        
         return node
+    
+    def operadores_asignacion(self):
+        operador = self.token_actual.value[0] #obtener el operador base (+, -, *, /, %)
+        if operador == '+':
+            token_op = Token('Operador', '+=')
+        elif operador == '-':
+            token_op = Token('Operador', '-=')
+        elif operador == '*':
+            token_op = Token('Operador', '*=')
+        elif operador == '/':
+            token_op = Token('Operador', '/=')
+        elif operador == '%':
+            token_op = Token('Operador', '%=')
+        else:
+            linea = getattr(self.token_actual, 'linea', 0)
+            raise Exception(f"Linea {linea} | Operador de asignación no reconocido: {self.token_actual.value}")
     
     def factor(self): #funcion para procesar los tokens
         token = self.token_actual

@@ -48,6 +48,8 @@ palabrasReservadas = {  # palabras reservadas básicas de Ruby
     "if": "condicional if",
     "elsif": "condicional elsif",
     "else": "condicional else",
+    "True": "valor booleano verdadero",
+    "False": "valor booleano falso",
     "unless": "condicional unless",
     "while": "bucle while",
     "until": "bucle until",
@@ -122,7 +124,7 @@ def identificarString(token):
     return re.match(patron, token) is not None
 
 def tokenizar(linea):
-    patron = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\*\*|\|\|=|===|==|!=|>=|<=|<=>|\+=|-=|\*=|/=|%=|\|\||&&|\.\.\.|\.\.|::|=>|<<|>>|[(){}\[\];,=+\-*/%?!:&|^~<>]|[a-zA-Z_]\w*|\d+'
+    patron = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\*\*|\|\|=|===|==|!=|>=|<=|<=>|\+\+|\+=|-=|\*=|/=|%=|\|\||&&|\.\.\.|\.\.|::|=>|<<|>>|[(){}\[\];,=+\-*/%?!:&|^~<>]|[a-zA-Z_]\w*|\d+\.\d+|\d+'
     tokens = re.findall(patron, linea)
     return tokens
 

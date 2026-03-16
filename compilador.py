@@ -6,6 +6,7 @@ import os
 import lexico as lex
 import sintactico as sintax
 import semantico as sem
+import generador as gen
 import re
 
 class Compilador(tk.Tk):
@@ -68,6 +69,10 @@ class Compilador(tk.Tk):
         salida_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.salida.config(yscrollcommand=salida_scroll.set)
 
+        #verificador para generar código intermedio
+        self.semenatico_ok = False
+
+
 
     def barra_menu(self):
         barra_menu = tk.Menu(self)
@@ -87,6 +92,8 @@ class Compilador(tk.Tk):
         menu_editar.add_command(label="Rehacer")
         menu_editar.add_command(label="Buscar")
         menu_editar.add_command(label="Reemplazar")
+        menu_editar.add_separator()
+        menu_editar.add_command(label="Limpiar Terminal", command=self.limpiar_salida)
         menu_compilador = tk.Menu(barra_menu, tearoff=0)
         barra_menu.add_cascade(label="Compilador", menu=menu_compilador)
         menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
@@ -276,14 +283,24 @@ class Compilador(tk.Tk):
                     self.escribir_salida(f"Línea {linea} | {mensaje}")
                     if linea > 0:
                         self.marcar_linea_error(linea)
+                self.semenatico_ok = False
             else:
+                self.semenatico_ok = True
                 self.escribir_salida("No se encontraron errores semánticos.")
 
             self.escribir_salida("\nTabla de Símbolos:")
             if not tabla_simbolos:
                 self.escribir_salida("La tabla de símbolos está vacía.")
-            for variable, tipo in tabla_simbolos.items():
-                self.escribir_salida(f"Variable: {variable} | Tipo: {tipo}")
+            else:
+                encabezado = f"| {'Símbolo'.ljust(10)} | {'Tipo de datos'.ljust(15)} | {'Descripción'.ljust(20)} | {'Bytes'.ljust(5)} |"
+                self.escribir_salida(encabezado)
+                self.escribir_salida("-" * len(encabezado))
+                for simbolo, info in tabla_simbolos.items():
+                    tipo = str(info['tipo'])
+                    desc = str(info['descripcion'])
+                    fila = f"| {simbolo.ljust(10)} | {tipo.ljust(15)} | {desc.ljust(20)} | {str(info['bytes']).ljust(5)} |"
+                    self.escribir_salida(fila)
+
         except Exception as e:
             mensaje_error = str(e)
             self.escribir_salida(f"Error: {mensaje_error}")
@@ -294,8 +311,43 @@ class Compilador(tk.Tk):
                     self.marcar_linea_error(linea_num)
 
     def generar_codigo(self):
-        self.escribir_salida("Funcionalidad de generación de código aún no implementada.")
+        self.limpiar_errores_visuales()
+        self.limpiar_salida()
+
+        if not self.semenatico_ok:
+            self.escribir_salida("Análisis semántico no realizado o con errores.")
+            return
+        codigo = self.bloque_codigo.get('1.0', END).strip()
+        if not codigo:
+            self.escribir_salida("El bloque de código está vacío. Por favor, ingresa código para analizar.")
+            return
         
+        es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
+        if not es_valido:
+            self.escribir_salida(f"Error: {mensaje_error} (Línea {linea_error})")
+            self.marcar_linea_error(linea_error)
+            return
+        
+        try:
+            lista_tokens = lex.generar_tokens(codigo)
+            parser = sintax.Parser(lista_tokens)
+            arbol = parser.parse()
+
+            generador_codigo = gen.GeneradorCodigo()
+            codigo_generado = generador_codigo.generador(arbol)
+            for linea in codigo_generado:
+                self.escribir_salida(linea)
+            self.semenatico_ok = False
+
+        except Exception as e:
+            mensaje_error = str(e)
+            self.escribir_salida(f"Error al generar código: {mensaje_error}")
+            match= re.search(r'Linea (\d+)', mensaje_error)
+            if match:
+                linea_num = int(match.group(1))
+                if linea_num > 0:
+                    self.marcar_linea_error(linea_num)
+
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()
         self.bloque_codigo.delete('1.0', END)
