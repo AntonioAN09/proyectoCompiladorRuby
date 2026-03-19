@@ -45,6 +45,7 @@ operadores = {
 }
 
 palabrasReservadas = {  # palabras reservadas básicas de Ruby
+    "require": "importar librerias",
     "if": "condicional if",
     "elsif": "condicional elsif",
     "else": "condicional else",
@@ -124,7 +125,7 @@ def identificarString(token):
     return re.match(patron, token) is not None
 
 def tokenizar(linea):
-    patron = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\*\*|\|\|=|===|==|!=|>=|<=|<=>|\+\+|\+=|-=|\*=|/=|%=|\|\||&&|\.\.\.|\.\.|::|=>|<<|>>|[(){}\[\];,=+\-*/%?!:&|^~<>]|[a-zA-Z_]\w*|\d+\.\d+|\d+'
+    patron = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\*\*|\|\|=|===|==|!=|>=|<=|<=>|\+\+|\+=|-=|\*=|/=|%=|\|\||&&|\.\.\.|\.\.|::|=>|<<|>>|[(){}\[\];,=+\-*/%?!:&|^~<>.]|[a-zA-Z_]\w*|\d+\.\d+|\d+|[^\s]'
     tokens = re.findall(patron, linea)
     return tokens
 
@@ -170,7 +171,7 @@ def generar_tokens(codigo):
     numero_linea = 1 #contador para la linea actual
     for linea in codigo.splitlines():
         lin = linea.strip()
-        if not linea or linea.startswith("#"):
+        if not lin or lin.startswith("#"):
             numero_linea += 1
             continue
 

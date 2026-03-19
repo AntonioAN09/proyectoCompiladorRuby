@@ -24,12 +24,12 @@ class Semantico:
         valor = nodo.token.value
         linea = getattr(nodo.token, 'linea', 0) #obtener la linea del token, si no existe usa 0
         
-        if tipo_token == 'Operador':
-            self.registrar_simbolo(valor, 'operador', "Operador", 1)
-        elif tipo_token == 'Simbolo':
-            self.registrar_simbolo(valor, 'símbolo', "Símbolo", 1)
-        elif tipo_token == 'PalabraReservada':
-            self.registrar_simbolo(valor, 'palabra_res', "Palabra Reservada", len(valor))
+        # if tipo_token == 'Operador':
+        #     self.registrar_simbolo(valor, 'operador', "Operador", 1)
+        # elif tipo_token == 'Simbolo':
+        #     self.registrar_simbolo(valor, 'símbolo', "Símbolo", 1)
+        # elif tipo_token == 'PalabraReservada':
+        #     self.registrar_simbolo(valor, 'palabra_res', "Palabra Reservada", len(valor))
 
         #regla de conector: <instrucción> -> <instrucción>
         if tipo_token == 'Conector' and valor in ['->', 'Ramas']:
@@ -54,27 +54,53 @@ class Semantico:
             info_variable = self.tabla_simbolos[valor]
             return (info_variable['tipo'], info_variable['bytes'])
         
-        elif tipo_token == 'Operador' and valor == '=': #regla de asignación: <id> = <expresión>
+        elif tipo_token == 'Operador' and valor == '=': #regla de asignación
             self.registrar_simbolo(valor, 'operador', 'asignacion', 1)
             nodo_izq = nodo.left
             tipo_der, bytes_der = self.visitar(nodo.right)
-            if nodo_izq.token.type != 'Identificador':
-                self.errores.append((f"Error semántico: No se puede tener <expr> = <valor>, debe ser <id> = <expr>.", linea))
+            
+            #caso 1 asignación a una variable normal (ej. i = 0)
+            if nodo_izq.token.type == 'Identificador':
+                nombre_variable = nodo_izq.token.value
+                if tipo_der != 'Error':
+                    self.registrar_simbolo(nombre_variable, tipo_der, 'Variable', bytes_der)
+                return (tipo_der, bytes_der)
+            
+            #caso 2 asignación a un índice de arreglo (ej. arr[j] = temp)
+            elif nodo_izq.token.type == 'Operador' and nodo_izq.token.value == '[]':
+                tipo_izq, _ = self.visitar(nodo_izq)
+                if tipo_izq == 'Error': return ('Error', 0)
+                # Opcional: validar que no se asigne un string a un arreglo de int
+                if tipo_izq != tipo_der and tipo_der != 'Error':
+                     self.errores.append((f"Error semántico: No se puede asignar tipo '{tipo_der}' a un elemento de tipo '{tipo_izq}'.", linea))
+                     return ('Error', 0)
+                return (tipo_der, bytes_der)
+            
+            elif nodo_izq.token.type == 'Numero':
+                self.errores.append((f"Error semantico: No se puede asignar un valor a un numero literal '{nodo_izq.token.value}'.", linea))
                 return ('Error', 0)
-            nombre_variable = nodo_izq.token.value
-            if tipo_der != 'Error':
-                self.registrar_simbolo(nombre_variable, tipo_der, 'Variable', bytes_der)
-            return (tipo_der, bytes_der)
+            else:
+                self.errores.append((f"Error semántico: Lado izquierdo de la asignación inválido.", linea))
+                return ('Error', 0)
 
-        elif tipo_token == 'Operador' and valor in ('+', '-', '*', '/'): #regla de operación aritmética: <expresión> <operador> <expresión>
+        elif tipo_token == 'Operador' and valor in ('+', '-', '*', '/', '%'): #regla de operación aritmética: <expresión> <operador> <expresión>
             tipo_izq, bytes_izq = self.visitar(nodo.left)
             tipo_der, bytes_der = self.visitar(nodo.right)
 
             if tipo_izq == 'Error' or tipo_der == 'Error':
                 return ('Error', 0)
+            #concatenacion de cadenas con operador '+'
+            if valor == '+' and tipo_izq == 'string' and tipo_der == 'string':
+                return ('string', bytes_izq + bytes_der -2) #restar 2 por las comillas de cada cadena
+            
             if tipo_izq not in ['int', 'double'] or tipo_der not in ['int', 'double']:
                 self.errores.append((f"Error semántico: Operación '{valor}' no soportada entre tipos '{tipo_izq}' y '{tipo_der}'.", linea))
                 return ('Error', 0)
+            
+            if valor == '%' and (tipo_izq == 'double' or tipo_der == 'double'):
+                self.errores.append((f"Error semántico: Operador '%' no soportado para tipo 'double'.", linea))
+                return ('Error', 0)
+
             if tipo_izq == 'double' or tipo_der == 'double':
                 return ('double', 8)
             return ('int', 4)
@@ -96,6 +122,12 @@ class Semantico:
             else:
                 self.errores.append((f"Error semántico: Comparación '{valor}' no soportada entre tipos '{tipo_izq}' y '{tipo_der}'.", linea))
                 return ('Error', 0)
+            
+        elif tipo_token == 'PalabraReservada' and valor == 'require': #regla de importación: require <string>
+            tipo_arg, _ = self.visitar(nodo.left)
+            if tipo_arg != 'string':
+                self.errores.append((f"Error semántico: 'require' espera una cadena de texto, se recibió '{tipo_arg}'.", linea))
+            return ('None', 0)
         
         elif tipo_token == 'PalabraReservada' and valor == 'if': #regla de if: if <condición>
             tipo_condicion, _ = self.visitar(nodo.left) #visitar la condición del if
@@ -147,5 +179,40 @@ class Semantico:
             self.registrar_simbolo(nombre_var, tipo_final, "Variable", bytes_final)
             
             return (tipo_final, bytes_final)
+
+        elif tipo_token == 'Arreglo':
+            return ('array_int', 8)
+            
+        elif tipo_token == 'Operador' and valor == '[]': # regla para acceso a índices: arr[j]
+            tipo_izq, _ = self.visitar(nodo.left) # la variable (arr)
+            tipo_der, _ = self.visitar(nodo.right) # el índice (j)
+            
+            if tipo_izq == 'Error' or tipo_der == 'Error': 
+                return ('Error', 0)
+            
+            if tipo_der != 'int':
+                self.errores.append((f"Error semántico: El índice del arreglo debe ser de tipo 'int', no '{tipo_der}'.", linea))
+                return ('Error', 0)
+                
+            if not tipo_izq.startswith('array'):
+                self.errores.append((f"Error semántico: La variable '{nodo.left.token.value}' no es un arreglo.", linea))
+                return ('Error', 0)
+                
+            return ('int', 4) # El Bubble Sort saca enteros del arreglo
+            
+        elif tipo_token == 'Operador' and valor == '.': # regla para métodos/propiedades: arr.length
+            tipo_izq, _ = self.visitar(nodo.left)
+            propiedad = nodo.right.token.value
+            
+            if tipo_izq == 'Error': 
+                return ('Error', 0)
+            
+            if propiedad in ['length', 'size']:
+                if tipo_izq.startswith('array') or tipo_izq == 'string':
+                    return ('int', 4) # length devuelve un entero
+                else:
+                    self.errores.append((f"Error semántico: No se puede obtener '{propiedad}' de un tipo '{tipo_izq}'.", linea))
+                    return ('Error', 0)
+            return ('None', 0)
 
         return ('None', 0)

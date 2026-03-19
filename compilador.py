@@ -235,7 +235,7 @@ class Compilador(tk.Tk):
             return
         es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
         if not es_valido:
-            self.escribir_salida(f"Error de sintaxis: {mensaje_error} (Línea {linea_error})")
+            self.escribir_salida(f"Error sintactico: {mensaje_error} (Línea {linea_error})")
             self.marcar_linea_error(linea_error)
             return
         try:
@@ -265,7 +265,7 @@ class Compilador(tk.Tk):
             return
         es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
         if not es_valido:
-            self.escribir_salida(f"Error: {mensaje_error} (Línea {linea_error})")
+            self.escribir_salida(f"Error sintactico: {mensaje_error} (Línea {linea_error})")
             self.marcar_linea_error(linea_error)
             return
         try:
@@ -303,7 +303,7 @@ class Compilador(tk.Tk):
 
         except Exception as e:
             mensaje_error = str(e)
-            self.escribir_salida(f"Error: {mensaje_error}")
+            self.escribir_salida(f"Error sintactico: {mensaje_error}")
             match= re.search(r'Linea (\d+)', mensaje_error)
             if match:
                 linea_num = int(match.group(1))
@@ -324,7 +324,7 @@ class Compilador(tk.Tk):
         
         es_valido, linea_error, mensaje_error = validar.validar_aperturaCierre(codigo)
         if not es_valido:
-            self.escribir_salida(f"Error: {mensaje_error} (Línea {linea_error})")
+            self.escribir_salida(f"Error sintactico: {mensaje_error} (Línea {linea_error})")
             self.marcar_linea_error(linea_error)
             return
         
