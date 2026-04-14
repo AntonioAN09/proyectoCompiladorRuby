@@ -119,3 +119,41 @@ class GeneradorCodigo:
         elif tipo == 'PalabraReservada' and valor == 'require':
             nombre_lib = nodo.left.token.value if nodo.left else "desconocida"
             self.codigo.append(f"Importar librería: {nombre_lib}")
+
+        #estructura case/switch
+        elif tipo == 'PalabraReservada' and valor == 'case':
+            self.codigo.append("-- Inicio estructura Case --")
+            self.codigo.append("Cargar valor a evaluar (switch_expr)")
+            self.visitar(nodo.left) 
+            self.visitar(nodo.right) # Visita los 'when'
+            self.codigo.append("-- Fin estructura Case --")
+            
+        elif tipo == 'PalabraReservada' and valor == 'when':
+            self.codigo.append("-- Evaluando Caso (When) --")
+            self.visitar(nodo.left) 
+            self.codigo.append("Comparar con switch_expr y Saltar si falso al SIGUIENTE_CASO")
+            self.codigo.append("-- Bloque When Verdadero --")
+            self.visitar(nodo.right)
+            self.codigo.append("Saltar al FIN_CASE (jmp)")
+
+        elif tipo == 'Operador' and valor == '..':
+            self.visitar(nodo.left) 
+            self.visitar(nodo.right) 
+            self.codigo.append("Generar rango (range)")
+
+        elif tipo == 'PalabraReservada' and valor == 'for':
+            nodo_iteracion = nodo.left
+            nombre_var = nodo_iteracion.left.token.value
+
+            self.codigo.append(f"Inicializar iterador: {nombre_var}")
+            self.visitar(nodo_iteracion.right)
+            
+            self.codigo.append("-- Inicio del bucle For --")
+            self.codigo.append("Comprobar limite del rango y Saltar si falso a FIN_FOR (jmpf)")
+            self.codigo.append("-- Bloque For Verdadero --")
+            
+            self.visitar(nodo.right)
+            
+            self.codigo.append(f"Aumentar iterador (inc): {nombre_var}")
+            self.codigo.append("Saltar al inicio del For (jmp)")
+            self.codigo.append("-- Fin del bucle For --")

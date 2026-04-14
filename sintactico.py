@@ -57,7 +57,7 @@ class Parser: #clase para el parseo
         nodo_raiz = self.instruccion()
 
         while self.token_actual.type != 'Fin':
-            if not parse_principal and self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['end', 'else', 'elsif']:
+            if not parse_principal and self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['end', 'else', 'elsif', 'when']:
                 break
             siguiente_inst = self.instruccion()
             if siguiente_inst:
@@ -114,8 +114,13 @@ class Parser: #clase para el parseo
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'if':
             return self.condicional_if()
         
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'case':
+            return self.estructura_case()
+        
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'while':
             return self.bucle_while()
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'for':
+            return self.bucle_for()
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['True', 'False', 'false', 'true']:
             token_booleano = self.token_actual
             self.eat('PalabraReservada')
@@ -157,6 +162,30 @@ class Parser: #clase para el parseo
         nodo_if.right = nodo_ramas
         return nodo_if
     
+    def estructura_case(self): #procesa la estructura para el switch/case
+        token_case = self.token_actual
+        self.eat('PalabraReservada', 'case')
+        nodo_case = TreeNode(token_case)
+        nodo_case.left = self.expr()
+        actual_nodo = nodo_case
+        while self .token_actual.type == 'PalabraReservada' and self.token_actual.value == 'when':
+            token_when = self.token_actual
+            self.eat('PalabraReservada', 'when')
+            nodo_when= TreeNode(token_when)
+            nodo_when.left = self.expr()
+            nodo_ramas = TreeNode(Token('Conector', 'Ramas'))
+            nodo_ramas.left = self.bolque_instrucciones()
+            nodo_when.right = nodo_ramas
+            actual_nodo.right = nodo_when
+            actual_nodo = nodo_ramas
+
+        if self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'else':
+            self.eat('PalabraReservada', 'else')
+            actual_nodo.right = self.bolque_instrucciones()
+        
+        self.eat('PalabraReservada', 'end')
+        return nodo_case
+    
     def bucle_while(self):
         token = self.token_actual
         self.eat('PalabraReservada', 'while')
@@ -165,6 +194,36 @@ class Parser: #clase para el parseo
         nodo_while.right = self.bolque_instrucciones()
         self.eat('PalabraReservada', 'end')
         return nodo_while
+    
+    def bucle_for(self):
+        token_for = self.token_actual
+        self.eat('PalabraReservada', 'for')
+        nodo_for = TreeNode(token_for)
+
+        token_iterador = self.token_actual #para el iterador del for
+        self.eat('Identificador')
+        nodo_iterador = TreeNode(token_iterador)
+        self.eat('PalabraReservada', 'in')
+        nodo_rango = self.expr() #para el rango del for
+
+        if self.token_actual.type == 'Operador' and self.token_actual.value == '..':
+            token_puntos = self.token_actual
+            self.eat('Operador', '..')
+            nuevo_rango = TreeNode(token_puntos)
+            nuevo_rango.left = nodo_rango
+            nuevo_rango.right = self.expr() #rango superior del for
+            nodo_rango = nuevo_rango
+
+        nodo_iteracion = TreeNode(Token('Conector', 'Iteracion'))
+        nodo_iteracion.left = nodo_iterador
+        nodo_iteracion.right = nodo_rango
+
+        nodo_for.left = nodo_iteracion
+        nodo_for.right = self.bolque_instrucciones()
+
+        self.eat('PalabraReservada', 'end')
+        return nodo_for
+
 
     def condicion(self): #procesa una condición
         nodo = self.expr() #comienza con una expresión
@@ -309,3 +368,4 @@ class Parser: #clase para el parseo
             linea = getattr(self.token_actual, 'linea', 0) #obtener la linea del token actual para el mensaje de error
             self.next_token() #avanza al siguiente token para evitar un bucle infinito
             raise Exception(f"Linea {linea} | Sintaxis invalida en token: {valor_error}")
+

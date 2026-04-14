@@ -7,7 +7,11 @@ import lexico as lex
 import sintactico as sintax
 import semantico as sem
 import generador as gen
+import ensamblador as asm
 import re
+import sys
+from io import StringIO
+import time
 
 class Compilador(tk.Tk):
     def __init__(self):
@@ -41,7 +45,7 @@ class Compilador(tk.Tk):
         self.bloque_codigo.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Configurar tags para resaltar errores
-        self.bloque_codigo.tag_config("error", background="#ffcccc", underline=True, foreground="#cc0000")
+        self.bloque_codigo.tag_config("error", background="#edafaf", underline=True, foreground="#cc0000")
         self.bloque_codigo.tag_config("error_bg", background="#ffe6e6")
 
         #crear scroll para el bloque de código
@@ -114,8 +118,8 @@ class Compilador(tk.Tk):
         #menú desplegable para el botón
         menu = tk.Menu(menubutton, tearoff=0)
         menubutton.config(menu=menu)
-        menu.add_command(label="Compilar")
-        menu.add_command(label="Ejecutar")
+        menu.add_command(label="Compilar", command=self.generar_codigo)
+        menu.add_command(label="Ejecutar", command=self.ejecutar_codigo)
 
 
     def nuevo_archivo(self):
@@ -335,8 +339,19 @@ class Compilador(tk.Tk):
 
             generador_codigo = gen.GeneradorCodigo()
             codigo_generado = generador_codigo.generador(arbol)
-            for linea in codigo_generado:
-                self.escribir_salida(linea)
+            # for linea in codigo_generado:
+            #     self.escribir_salida(linea)
+
+            self.escribir_salida("\nGenerando código ensamblador...")
+            analizador_semantico = sem.Semantico()
+            errores_sem, tabla_simbolos = analizador_semantico.analizar(arbol)
+            
+            traductor = asm.Ensamblador(tabla_simbolos, codigo_generado)
+            codigo_asm_final = traductor.generar()
+            
+            for linea_asm in codigo_asm_final:
+                self.escribir_salida(linea_asm)
+                
             self.semenatico_ok = False
 
         except Exception as e:
@@ -347,6 +362,123 @@ class Compilador(tk.Tk):
                 linea_num = int(match.group(1))
                 if linea_num > 0:
                     self.marcar_linea_error(linea_num)
+
+    def ejecutar_codigo(self):
+        self.limpiar_errores_visuales()
+        self.limpiar_salida()
+        self.analizar_semantico()
+        
+        if not self.semenatico_ok:
+            self.escribir_salida("\nERROR DE EJECUCION.")
+            return
+        
+        self.limpiar_errores_visuales()
+        self.limpiar_salida()
+        
+
+        
+        codigo = self.bloque_codigo.get('1.0', END).strip()
+        if not codigo:
+            self.escribir_salida("No hay código para ejecutar.")
+            return
+
+        self.escribir_salida("--- Ejecutando Programa ---")
+
+        # 2. Transpilador Ruby -> Python
+        python_code = []
+        indent_level = 0
+        switch_var = ""
+        first_when = True
+        
+        for linea in codigo.splitlines():
+            lin = linea.strip()
+            if not lin or lin.startswith("#"):
+                continue
+            
+            # Controlar los cierres y retrocesos de indentación
+            if lin == 'end':
+                indent_level = max(0, indent_level - 1)
+                continue
+            elif lin.startswith('elsif ') or lin == 'else' or lin.startswith('when '):
+                # El primer 'when' no retrocede indentación porque el 'case' no la aumentó
+                if lin.startswith('when ') and first_when:
+                    pass 
+                else:
+                    indent_level = max(0, indent_level - 1)
+
+            py_line = "    " * indent_level
+
+            # Traducción de métodos de arreglos
+            lin = re.sub(r'(\w+)\.length', r'len(\1)', lin)
+            lin = re.sub(r'(\w+)\.size', r'len(\1)', lin)
+
+            # Traducción de sintaxis principal
+            if lin.startswith('puts '):
+                py_line += f"print({lin[5:]})"
+            elif lin.startswith('print '):
+                py_line += f"print({lin[6:]}, end='')"
+            elif lin.startswith('if '):
+                py_line += f"{lin}:"
+                indent_level += 1
+            elif lin.startswith('elsif '):
+                py_line += f"elif {lin[6:]}:"
+                indent_level += 1
+            elif lin.startswith('while '):
+                py_line += f"{lin}:"
+                indent_level += 1
+            elif lin.startswith('for ') and ' in ' in lin:
+                match = re.match(r'for\s+(\w+)\s+in\s+(.+)\.\.(.+)', lin)
+                if match:
+                    var, start, end = match.groups()
+                    py_line += f"for {var} in range({start}, {end} + 1):"
+                    indent_level += 1
+                else:
+                    py_line += lin
+            
+            # Traducción del Switch (case / when) convertido a if/elif
+            elif lin.startswith('case '):
+                switch_var = lin[5:].strip()
+                first_when = True
+                py_line += f"__switch_var = {switch_var}"
+            elif lin.startswith('when '):
+                condicion = lin[5:].strip()
+                if first_when:
+                    py_line += f"if __switch_var == {condicion}:"
+                    first_when = False
+                else:
+                    py_line += f"elif __switch_var == {condicion}:"
+                indent_level += 1
+            elif lin == 'else':
+                py_line += "else:"
+                indent_level += 1
+            
+            elif lin.startswith('require '):
+                py_line += f"# {lin} (ignorado en ejecución rápida)"
+            else:
+                py_line += lin # Asignaciones, math, etc.
+
+            python_code.append(py_line)
+
+        codigo_final = "\n".join(python_code)
+        
+        viejo_stdout = sys.stdout
+        salida_redirigida = sys.stdout = StringIO()
+        
+        try:
+            entorno_local = {}
+            exec(codigo_final, {}, entorno_local)
+            
+            resultado = salida_redirigida.getvalue()
+            if resultado:
+                self.escribir_salida(resultado)
+            else:
+                self.escribir_salida("[Programa ejecutado sin salidas en consola]")
+                
+        except Exception as e:
+            self.escribir_salida(f"\nError de Ejecución Interno:\n{e}")
+        finally:
+            sys.stdout = viejo_stdout
+            self.escribir_salida("-" * 27)
 
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()

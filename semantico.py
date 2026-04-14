@@ -2,7 +2,8 @@ class Semantico:
     def __init__(self):
         self.tabla_simbolos = {} #tabla de simbolos para almacenar las variables declaradas y sus tipos
         self.errores = [] #lista para almacenar los errores semanticos encontrados
-
+        self.stack_case = [] #pila para manejar el contexto de los bloques case/when anidados
+        
     def registrar_simbolo(self, nombre, tipo, descripcion, bytes):
         self.tabla_simbolos[nombre] = {
             'tipo': tipo,
@@ -13,6 +14,7 @@ class Semantico:
     def analizar(self, nodo_raiz):
         self.tabla_simbolos = {} #reiniciar la tabla de simbolos para cada análisis
         self.errores = [] #reiniciar la lista de errores para cada análisis
+        self.stack_case = [] #reiniciar la pila de contextos case/when
         self.visitar(nodo_raiz)
         return self.errores, self.tabla_simbolos
     
@@ -55,7 +57,7 @@ class Semantico:
             return (info_variable['tipo'], info_variable['bytes'])
         
         elif tipo_token == 'Operador' and valor == '=': #regla de asignación
-            self.registrar_simbolo(valor, 'operador', 'asignacion', 1)
+            # self.registrar_simbolo(valor, 'operador', 'asignacion', 1)
             nodo_izq = nodo.left
             tipo_der, bytes_der = self.visitar(nodo.right)
             
@@ -133,6 +135,36 @@ class Semantico:
             tipo_condicion, _ = self.visitar(nodo.left) #visitar la condición del if
             if tipo_condicion != 'Error' and tipo_condicion != 'Booleano':
                 self.errores.append((f"Error semántico: Condición del 'if' debe ser de tipo 'Booleano', no '{tipo_condicion}'.", linea))
+
+            self.visitar(nodo.right)
+            return ('None', 0)
+        elif tipo_token == 'PalabraReservada' and valor == 'case': #regla para la estructura case: case <expresión>
+            tipo_case, _ = self.visitar(nodo.left)
+            if tipo_case == 'Error':
+                return ('Error', 0)
+            self.stack_case.append({'tipo': tipo_case, 'valores_vistos': set()}) #push del contexto del case actual
+            self.visitar(nodo.right)
+            self.stack_case.pop() #pop del contexto del case actual
+            return ('None', 0)
+            
+        elif tipo_token == 'PalabraReservada' and valor == 'when': #regla para la estructura when: when
+            tipo_when, _ = self.visitar(nodo.left)
+            
+            if tipo_when == 'Error':
+                return ('Error', 0)
+                
+            if self.stack_case:
+                case_actual = self.stack_case[-1]
+                
+                if case_actual['tipo'] != tipo_when:
+                    self.errores.append((f"Error semántico: El 'when' es de tipo '{tipo_when}', pero el 'case' evalúa un '{case_actual['tipo']}'.", linea))
+                
+                if nodo.left.token.type in ['Numero', 'Cadena']:
+                    valor_when = nodo.left.token.value
+                    if valor_when in case_actual['valores_vistos']:
+                        self.errores.append((f"Error semántico: El caso 'when {valor_when}' está duplicado.", linea))
+                    else:
+                        case_actual['valores_vistos'].add(valor_when)
 
             self.visitar(nodo.right)
             return ('None', 0)
@@ -214,5 +246,34 @@ class Semantico:
                     self.errores.append((f"Error semántico: No se puede obtener '{propiedad}' de un tipo '{tipo_izq}'.", linea))
                     return ('Error', 0)
             return ('None', 0)
+        
+        elif tipo_token == 'Operador' and valor == '..': #regla para rangos: <numero> .. <numero>
+            tipo_izq, _ = self.visitar(nodo.left)
+            tipo_der, _ = self.visitar(nodo.right)
+            
+            if tipo_izq == 'Error' or tipo_der == 'Error': 
+                return ('Error', 0)
+            
+            if tipo_izq != 'int' or tipo_der != 'int':
+                self.errores.append((f"Error semántico: Los rangos solo pueden ser entre enteros, no '{tipo_izq}' y '{tipo_der}'.", linea))
+                return ('Error', 0)
+            
+            return ('rango', 8)
+            
+        elif tipo_token == 'PalabraReservada' and valor == 'for': #regla de for: for <id> in <rango>
+            nodo_iteracion = nodo.left
+            nodo_iterador = nodo_iteracion.left
+            nodo_rango = nodo_iteracion.right
+
+            nombre_var = nodo_iterador.token.value
+            self.registrar_simbolo(nombre_var, 'int', 'Variable de iteración for', 4) #asumimos que el iterador del for es siempre un int
+            tipo_rango, _ = self.visitar(nodo_rango) #validar el rango del for
+
+            if tipo_rango == 'Error':
+                return ('Error', 0)
+            
+            if tipo_rango not in ['rango', 'array_int']:
+                self.errores.append((f"Error semántico: El rango del 'for' debe ser un rango de enteros o un arreglo de enteros, no '{tipo_rango}'.", linea))
+                return ('Error', 0)
 
         return ('None', 0)
