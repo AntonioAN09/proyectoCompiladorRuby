@@ -48,7 +48,7 @@ class Parser: #clase para el parseo
         else:
             esperado = token_value if token_value else token_type
             linea = getattr(self.token_actual, 'linea', 0) #obtener la linea del token actual para el mensaje de error
-            raise Exception(f"Linea {linea} | Token inseperado: {self.token_actual.value}, se esperaba: {esperado}")
+            raise Exception(f"Linea {linea} | Token inseperado: '{self.token_actual.value}', se esperaba: {esperado}")
 
     def parse(self): #función principal para iniciar el proceso de parseo
         return self.bolque_instrucciones(parse_principal=True)
@@ -89,11 +89,18 @@ class Parser: #clase para el parseo
 
             self.posicion = posicion_guardada #restaura la posición guardada
             self.token_actual = self.tokens[self.posicion] #restaura el token actual
+            token_inicial = self.token_actual
 
             if es_asignacion:
-                return self.asignacion()
+                nodo = self.asignacion()
             else:
-                return self.expr() #si no es una asignación, se trata de una expresión
+                nodo = self.expr()
+
+            linea_inicial = getattr(token_inicial, 'linea', 0)
+            if getattr(self.token_actual, 'linea', 0) == linea_inicial and self.token_actual.type not in ['Fin', 'PalabraReservada']:
+                token_malo = self.token_actual.value
+                raise Exception(f"Linea {linea_inicial} | Sintaxis invalida: se esperaba un operador o un '=' antes de '{token_malo}'")
+            return nodo
             
         elif self.token_actual.type =='Metodo':
             token_metodo = self.token_actual
@@ -119,15 +126,56 @@ class Parser: #clase para el parseo
         
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'while':
             return self.bucle_while()
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'begin':
+            return self.bucle_do_while()
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'for':
             return self.bucle_for()
         elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value in ['True', 'False', 'false', 'true']:
             token_booleano = self.token_actual
             self.eat('PalabraReservada')
             return TreeNode(token_booleano)
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'def':
+            return self.declaracion_funcion()
+            
+        elif self.token_actual.type == 'PalabraReservada' and self.token_actual.value == 'return':
+            token_ret = self.token_actual
+            self.eat('PalabraReservada', 'return')
+            nodo_ret = TreeNode(token_ret)
+            nodo_ret.left = self.expr() #lo que devluelve la funcion
+            return nodo_ret
         
         return self.expr() #si no es un identificador ni un método, se trata de una expresión
 
+    def declaracion_funcion(self):
+        self.eat('PalabraReservada', 'def')
+        
+        #nombre de la funcion
+        nombre_func = self.token_actual
+        self.eat('Identificador')
+        
+        nodo_def = TreeNode(Token('PalabraReservada', 'def'))
+        nodo_def.value = nombre_func.value # Guardamos el nombre real
+        
+        #parametros
+        self.eat('Simbolo', '(')
+        parametros = []
+        if self.token_actual.type == 'Identificador':
+            parametros.append(self.token_actual.value)
+            self.eat('Identificador')
+            while self.token_actual.type == 'Simbolo' and self.token_actual.value == ',':
+                self.eat('Simbolo', ',')
+                parametros.append(self.token_actual.value)
+                self.eat('Identificador')
+        self.eat('Simbolo', ')')
+        
+        nodo_def.parametros = parametros # Guardamos la lista de parámetros
+        
+        #leer el cuerpo de la funcion
+        nodo_def.right = self.bolque_instrucciones()
+        
+        self.eat('PalabraReservada', 'end')
+        return nodo_def
+    
     def condicional_if(self): #procesa condicional if
         token_if = self.token_actual
         self.eat('PalabraReservada', 'if')
@@ -194,6 +242,18 @@ class Parser: #clase para el parseo
         nodo_while.right = self.bolque_instrucciones()
         self.eat('PalabraReservada', 'end')
         return nodo_while
+    
+    def bucle_do_while(self):
+        token_begin = self.token_actual
+        self.eat('PalabraReservada', 'begin')
+        nodo_do_while = TreeNode(Token('PalabraReservada', 'do-while'))
+
+        nodo_do_while.right = self.bolque_instrucciones()
+        self.eat('PalabraReservada', 'end')
+        self.eat('PalabraReservada', 'while')
+
+        nodo_do_while.left = self.condicion()
+        return nodo_do_while
     
     def bucle_for(self):
         token_for = self.token_actual
@@ -290,6 +350,16 @@ class Parser: #clase para el parseo
     
     def factor(self): #funcion para procesar los tokens
         token = self.token_actual
+
+        if token.type == 'Operador' and token.value == '-': #manejo para números negativos
+            self.eat('Operador', '-')
+            if self.token_actual.type == 'Numero':
+                nodo_negativo = TreeNode(Token('Numerador','-' + self.token_actual.value))
+                self.eat('Numero')
+                return nodo_negativo
+            else:
+                linea = getattr(self.token_actual, 'linea', 0)
+                raise Exception(f"Linea {linea} | Sintaxis invalida: se esperaba un número después del operador '-' para formar un número negativo, pero se encontró '{self.token_actual.value}'")
         
         if token.type == "Numero": #procesa un número creando un nodo para ese número
             self.eat("Numero")
@@ -299,14 +369,37 @@ class Parser: #clase para el parseo
             self.eat("Identificador")
             nodo_id = TreeNode(token)
         
+            if self.token_actual.type == 'Simbolo' and self.token_actual.value == '(':
+                self.eat('Simbolo', '(')
+                nodo_llamada = TreeNode(Token('Llamada', '()'))
+                nodo_llamada.value = nodo_id.token.value # Nombre de la funcion llamada
+                
+                
+                argumentos = []
+                if self.token_actual.type != 'Simbolo' or self.token_actual.value != ')':
+                    argumentos.append(self.expr())
+                    while self.token_actual.type == 'Simbolo' and self.token_actual.value == ',':
+                        self.eat('Simbolo', ',')
+                        argumentos.append(self.expr())
+                self.eat('Simbolo', ')')
+                
+                nodo_llamada.argumentos = argumentos
+                return nodo_llamada
+
             while self.token_actual.type in ['Simbolo', 'Operador'] and self.token_actual.value in ['.', '[']:
                 if self.token_actual.value == '[':
                     self.eat('Simbolo', '[')
                     nodo_acceso = TreeNode(Token('Operador', '[]'))
                     nodo_acceso.left = nodo_id
                     nodo_acceso.right = self.expr() #el índice del arreglo
+                    
+                    if self.token_actual.type == 'Simbolo' and self.token_actual.value ==  ',':
+                        linea = getattr(self.token_actual, 'linea', 0)
+                        raise Exception(f"Linea {linea} | Sitaxis no valida de asignacion en el arreglo '{nodo_id.token.value}'")
+
                     self.eat('Simbolo', ']')
                     nodo_id = nodo_acceso
+
                 elif self.token_actual.value == '.':
                     token_punto = self.token_actual
                     self.eat('Operador', '.')

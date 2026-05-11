@@ -1,6 +1,6 @@
 #interfaz Compilador Ruby
 import tkinter as tk
-from tkinter import ttk, messagebox, END, filedialog
+from tkinter import ttk, messagebox, END, filedialog, simpledialog
 import validaciones as validar
 import os
 import lexico as lex
@@ -41,20 +41,32 @@ class Compilador(tk.Tk):
         self.numeros_linea.pack(side=tk.LEFT, fill=tk.Y)
 
         #crear el bloque de código
-        self.bloque_codigo = tk.Text(editor_frame, wrap=tk.NONE, font=("Consolas", 12))
+        self.bloque_codigo = tk.Text(editor_frame, wrap=tk.NONE, font=("Consolas", 12), 
+                                     undo=True, maxundo=-1, autoseparators=True, background="white", 
+                                     fg="#000000", insertbackground='black')
         self.bloque_codigo.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Configurar tags para resaltar errores
-        self.bloque_codigo.tag_config("error", background="#edafaf", underline=True, foreground="#cc0000")
-        self.bloque_codigo.tag_config("error_bg", background="#ffe6e6")
+        #tags para resaltar errores
+        self.bloque_codigo.tag_config("error", background="#e67979", underline=True,
+                                       foreground="#d81616")
+        self.bloque_codigo.tag_config("error_bg", background="#cb8d8d")
+
+        #tags para palabras reservadas
+        self.bloque_codigo.tag_config("reservada", foreground="purple")
+        self.bloque_codigo.tag_config("string", foreground="green")
+        self.bloque_codigo.tag_config("numero", foreground="blue")
+
 
         #crear scroll para el bloque de código
         scrollbar = tk.Scrollbar(editor_frame, command=self.bloque_codigo.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.bloque_codigo.config(yscrollcommand=lambda *args: self.sincronizar_scroll(scrollbar, *args))
+        
+        
+        self.bloque_codigo.bind('<KeyRelease>', self.resaltar_sintaxis)
 
         #actualiza el número de la línea
-        self.bloque_codigo.bind('<KeyRelease>', self.actualizar_numeros)
+        self.bloque_codigo.bind('<KeyRelease>', self.actualizar_numeros, add='+')
         
         self.actualizar_numeros()
 
@@ -64,8 +76,8 @@ class Compilador(tk.Tk):
 
         #seccion de solo lectura para mostrar la salida
         self.salida = tk.Text(salida_frame, wrap=tk.NONE, height=10, 
-                              font=("Consolas", 10), state='disabled',
-                              bg='#1e1e1e', fg='white')
+                              font=("Cascadia Code", 10), state='disabled',
+                              bg="#282c34", fg="#e06c75")
         self.salida.pack(fill=tk.BOTH, expand=True)
 
         #scroll para el área de la salida
@@ -76,6 +88,7 @@ class Compilador(tk.Tk):
         #verificador para generar código intermedio
         self.semenatico_ok = False
 
+        self.bind_all("<Control-BackSpace>", self.borrar_palabra)
 
 
     def barra_menu(self):
@@ -84,44 +97,59 @@ class Compilador(tk.Tk):
 
         menu_archivo = tk.Menu(barra_menu, tearoff=0)
         barra_menu.add_cascade(label="Archivo", menu=menu_archivo)
-        menu_archivo.add_command(label="Nuevo", command=self.nuevo_archivo)
-        menu_archivo.add_command(label="Abrir", command=self.abrir_archivo)
-        menu_archivo.add_command(label="Guardar", command=self.guardar_archivo)
-        menu_archivo.add_command(label="Limpiar", command=self.limpiar_archivo)
+        menu_archivo.add_command(label="Nuevo", command=self.nuevo_archivo, accelerator="Ctrl+N")
+        menu_archivo.add_command(label="Abrir", command=self.abrir_archivo, accelerator="Ctrl+O")
+        menu_archivo.add_command(label="Guardar", command=self.guardar_archivo, accelerator="Ctrl+S")
+        menu_archivo.add_command(label="Limpiar", command=self.limpiar_archivo, accelerator="Ctrl+L")
         menu_archivo.add_separator()
-        menu_archivo.add_command(label="Salir", command=self.quit)
+        menu_archivo.add_command(label="Salir", command=self.quit, accelerator="Alt+F4")
+        
         menu_editar = tk.Menu(barra_menu, tearoff=0)
         barra_menu.add_cascade(label="Editar", menu=menu_editar)
-        menu_editar.add_command(label="Deshacer")
-        menu_editar.add_command(label="Rehacer")
-        menu_editar.add_command(label="Buscar")
-        menu_editar.add_command(label="Reemplazar")
+        menu_editar.add_command(label="Deshacer", accelerator="Ctrl+Z", command=self.deshacer)
+        menu_editar.add_command(label="Rehacer", accelerator="Ctrl+Y", command=self.rehacer)
+        menu_editar.add_command(label="Buscar", accelerator="Ctrl+F", command=self.buscar)
+        menu_editar.add_command(label="Reemplazar", accelerator="Ctrl+M", command=self.reemplazar)
         menu_editar.add_separator()
-        menu_editar.add_command(label="Limpiar Terminal", command=self.limpiar_salida)
+        menu_editar.add_command(label="Limpiar Terminal", command=self.limpiar_salida, accelerator="Ctrl+P")
+        
         menu_compilador = tk.Menu(barra_menu, tearoff=0)
         barra_menu.add_cascade(label="Compilador", menu=menu_compilador)
-        menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico)
-        menu_compilador.add_command(label="Analizar Sintáctico", command=self.analizar_sintactico)
-        menu_compilador.add_command(label="Analizar Semántico", command=self.analizar_semantico)
-        menu_compilador.add_command(label='Generar Código', command=self.generar_codigo)
+        menu_compilador.add_command(label="Analizar Léxico", command=self.analizar_lexico, accelerator="Ctrl+Q")
+        menu_compilador.add_command(label="Analizar Sintáctico", command=self.analizar_sintactico, accelerator="Ctrl+W")
+        menu_compilador.add_command(label="Analizar Semántico", command=self.analizar_semantico, accelerator="Ctrl+E")
+        menu_compilador.add_command(label='Generar Código', command=self.generar_codigo, accelerator="Ctrl+R")
+
+        #atajos del teclado para las funciones del menú
+        self.bind_all("<Control-n>", lambda event: self.nuevo_archivo())
+        self.bind_all("<Control-o>", lambda event: self.abrir_archivo())
+        self.bind_all("<Control-s>", lambda event: self.guardar_archivo())
+        self.bind_all("<Control-f>", lambda event: self.buscar())
+        self.bind_all("<Control-m>", lambda event: self.reemplazar())
+        self.bind_all("<Control-z>", lambda event: self.deshacer())
+        self.bind_all("<Control-y>", lambda event: self.rehacer())
+        self.bind_all("<Control-l>", lambda event: self.limpiar_archivo())
+        self.bind_all("<Alt-F4>", lambda event: self.quit())
+        self.bind_all("<Control-q>", lambda event: self.analizar_lexico())
+        self.bind_all("<Control-w>", lambda event: self.analizar_sintactico())
+        self.bind_all("<Control-e>", lambda event: self.analizar_semantico())
+        self.bind_all("<Control-r>", lambda event: self.generar_codigo())
+        self.bind_all("<Control-p>", lambda event: self.limpiar_salida())
+        self.bind_all("<F5>", lambda event: self.ejecutar_codigo())
 
     def barra_botones(self):
-        #frame para la barra de botones (al mismo nivel del menú)
-        barra = tk.Frame(self, bg='#f0f0f0')
-        barra.pack(side=tk.TOP, fill=tk.X, padx=0, pady=0)
-        
-        #menubutton que actúa como dropdown con ícono de triángulo (play)
-        menubutton = tk.Menubutton(barra, text="▶", bg='#f0f0f0', 
-                                   relief=tk.RAISED, bd=1, padx=8, pady=3, font=("Arial", 12))
-        menubutton.pack(side=tk.RIGHT, padx=5, pady=3)
-        
-        #menú desplegable para el botón
-        menu = tk.Menu(menubutton, tearoff=0)
-        menubutton.config(menu=menu)
-        menu.add_command(label="Compilar", command=self.generar_codigo)
-        menu.add_command(label="Ejecutar", command=self.ejecutar_codigo)
+        barra = tk.Frame(self, bg='white', height=40) 
+        barra.pack(side=tk.TOP, fill=tk.X)
+        barra.pack_propagate(False) # Congela la altura de la barra para que no se encoja
 
-
+        boton_ejecutar = tk.Button(barra, text="▶ Ejecutar Código (F5)", bg="#2ea043", fg="white", 
+                                   font=("Consolas", 10, "bold"), relief=tk.FLAT, 
+                                   activebackground="#238636", activeforeground="white",
+                                   cursor="hand2", padx=15, command=self.ejecutar_codigo)
+        
+        boton_ejecutar.pack(side=tk.RIGHT, padx=15, pady=5)
+    
+    
     def nuevo_archivo(self):
         if self.bloque_codigo.get('1.0', END).strip():  #verifica si el bloque de código no está vacío
             if messagebox.askyesno("Nuevo Archivo", "¿Deseas guardar el archivo actual?"):
@@ -375,16 +403,14 @@ class Compilador(tk.Tk):
         self.limpiar_errores_visuales()
         self.limpiar_salida()
         
-
-        
         codigo = self.bloque_codigo.get('1.0', END).strip()
         if not codigo:
             self.escribir_salida("No hay código para ejecutar.")
             return
 
         self.escribir_salida("--- Ejecutando Programa ---")
-
-        # 2. Transpilador Ruby -> Python
+        import time
+        tiempo_arranque = time.time()
         python_code = []
         indent_level = 0
         switch_var = ""
@@ -395,12 +421,12 @@ class Compilador(tk.Tk):
             if not lin or lin.startswith("#"):
                 continue
             
-            # Controlar los cierres y retrocesos de indentación
+            #para los cierres
             if lin == 'end':
                 indent_level = max(0, indent_level - 1)
                 continue
             elif lin.startswith('elsif ') or lin == 'else' or lin.startswith('when '):
-                # El primer 'when' no retrocede indentación porque el 'case' no la aumentó
+                #when no quita identacion
                 if lin.startswith('when ') and first_when:
                     pass 
                 else:
@@ -408,11 +434,9 @@ class Compilador(tk.Tk):
 
             py_line = "    " * indent_level
 
-            # Traducción de métodos de arreglos
             lin = re.sub(r'(\w+)\.length', r'len(\1)', lin)
             lin = re.sub(r'(\w+)\.size', r'len(\1)', lin)
 
-            # Traducción de sintaxis principal
             if lin.startswith('puts '):
                 py_line += f"print({lin[5:]})"
             elif lin.startswith('print '):
@@ -423,9 +447,28 @@ class Compilador(tk.Tk):
             elif lin.startswith('elsif '):
                 py_line += f"elif {lin[6:]}:"
                 indent_level += 1
+            
             elif lin.startswith('while '):
                 py_line += f"{lin}:"
                 indent_level += 1
+                python_code.append(py_line)
+                python_code.append("    " * indent_level + "import time")
+                python_code.append("    " * indent_level + f"if time.time() - {tiempo_arranque} > 3: raise Exception('Bucle_Infinito')")
+                continue 
+                
+            elif lin == 'begin':
+                py_line += "while True:"
+                indent_level += 1
+                python_code.append(py_line)
+                python_code.append("    " * indent_level + "import time")
+                python_code.append("    " * indent_level + f"if time.time() - {tiempo_arranque} > 3: raise Exception('Bucle_Infinito')")
+                continue
+
+            elif lin.startswith('end while '):
+                condicion = lin[10:].strip()
+                indent_level = max(0, indent_level - 1)
+                py_line = "    " * indent_level
+                py_line += f"    if not ({condicion}): break"
             elif lin.startswith('for ') and ' in ' in lin:
                 match = re.match(r'for\s+(\w+)\s+in\s+(.+)\.\.(.+)', lin)
                 if match:
@@ -435,7 +478,12 @@ class Compilador(tk.Tk):
                 else:
                     py_line += lin
             
-            # Traducción del Switch (case / when) convertido a if/elif
+            elif lin.startswith('def '):
+                py_line += f"{lin}:"
+                indent_level += 1
+            elif lin.startswith('return '):
+                py_line += f"{lin}"
+            
             elif lin.startswith('case '):
                 switch_var = lin[5:].strip()
                 first_when = True
@@ -455,30 +503,42 @@ class Compilador(tk.Tk):
             elif lin.startswith('require '):
                 py_line += f"# {lin} (ignorado en ejecución rápida)"
             else:
-                py_line += lin # Asignaciones, math, etc.
+                py_line += lin
 
             python_code.append(py_line)
 
         codigo_final = "\n".join(python_code)
         
+        print("\n--- CÓDIGO PYTHON GENERADO ---")
+        print(codigo_final)
+        print("------------------------------\n")
         viejo_stdout = sys.stdout
         salida_redirigida = sys.stdout = StringIO()
         
         try:
-            entorno_local = {}
-            exec(codigo_final, {}, entorno_local)
+            entorno_vacio = {}
+            exec(codigo_final, entorno_vacio)
             
             resultado = salida_redirigida.getvalue()
             if resultado:
                 self.escribir_salida(resultado)
             else:
                 self.escribir_salida("[Programa ejecutado sin salidas en consola]")
-                
+
         except Exception as e:
-            self.escribir_salida(f"\nError de Ejecución Interno:\n{e}")
+            mensaje_error = str(e)            
+            if "Bucle_Infinito" in mensaje_error:
+                self.escribir_salida("\nError de ejecucion: Bucle infinito")
+                self.escribir_salida("El programa tardo mas de 3 segundos y fue detenido.")
+            elif "list index out of range" in mensaje_error:
+                self.escribir_salida("Error de ejecucion, index fuera de rango.")
+                self.escribir_salida("Acceso a una posicion que no existe.")
+            elif "division by zero" in mensaje_error:
+                self.escribir_salida("Error de ejecucion, division por cero no permitida.")
+            else:
+                self.escribir_salida(f"Error de ejecucion: {mensaje_error}")
         finally:
             sys.stdout = viejo_stdout
-            self.escribir_salida("-" * 27)
 
     def limpiar_archivo(self):
         self.limpiar_errores_visuales()
@@ -496,6 +556,8 @@ class Compilador(tk.Tk):
         self.numeros_linea.yview_moveto(args[0])
 
     def actualizar_numeros(self, event=None): #función para actualizar los números de línea
+        if event:
+            self.semenatico_ok = False
         self.numeros_linea.config(state='normal')
         self.numeros_linea.delete('1.0', tk.END)
 
@@ -517,6 +579,107 @@ class Compilador(tk.Tk):
         self.salida.config(state='normal')
         self.salida.delete('1.0', tk.END)
         self.salida.config(state='disabled')
+
+    def deshacer(self): #funcion para deshacer cambios al codigo
+        try:
+            self.bloque_codigo.edit_undo()
+        except tk.TclError:
+            pass
+    def rehacer(self): #funcion para rehacer cambios al codigo
+        try:
+            self.bloque_codigo.edit_redo()
+        except tk.TclError:
+            pass
+    def borrar_palabra(self, event = None): #funcion para borrar la palabra con Ctrl+Backspace
+        try:
+            if self.bloque_codigo.tag_ranges("sel"):
+                self.bloque_codigo.delete("sel.first", "sel.last")
+            else:
+                self.bloque_codigo.delete("insert-1c wordstart", "insert")
+            return "break"
+        except tk.TclError:
+            pass
+    def buscar(self): #funcion para buscar texto en el bloque de código
+        objetivo = simpledialog.askstring("Buscar", "Ingrese el texto a buscar:")
+        if objetivo:
+            self.bloque_codigo.tag_remove('found', '1.0', tk.END)
+            inicio = '1.0'
+            while True:
+                inicio = self.bloque_codigo.search(objetivo, inicio, stopindex=tk.END)
+                if not inicio:
+                    break
+                fin = f"{inicio}+{len(objetivo)}c"
+                self.bloque_codigo.tag_add('found', inicio, fin)
+                self.bloque_codigo.tag_config('found', background='yellow')
+                inicio = fin
+    
+    def reemplazar(self):
+        #ventana emergente para buscar y reemplazar texto en el bloque de código
+        ventana = tk.Toplevel(self)
+        ventana.title("Buscar y Reemplazar")
+        ventana.geometry("350x200")
+        ventana.attributes("-topmost", True) #ventana al frente
+        ventana.transient(self) #asocia la ventana con el compilador
+        ventana.grab_set() #bloquea la ventana principal mientras esta abierta
+
+        var_buscar = tk.StringVar()
+        var_reemplazar = tk.StringVar()
+
+        tk.Label(ventana, text="Palabra a buscar:", font=("Arial", 10)).pack(pady=(15, 5))
+        entry_buscar = tk.Entry(ventana, textvariable=var_buscar, width=40, font=("Arial", 10))
+        entry_buscar.pack()
+        entry_buscar.focus()
+
+        tk.Label(ventana, text="Reemplazar con:", font=("Arial", 10)).pack(pady=(10, 5))
+        entry_reemplazar = tk.Entry(ventana, textvariable=var_reemplazar, width=40, font=("Arial", 10))
+        entry_reemplazar.pack()
+
+        #funcion para reemplazar el texto en el bloque de código
+        def ejecutar_reemplazo():
+            objetivo = var_buscar.get()
+            nuevo = var_reemplazar.get()
+            
+            if objetivo: #si se buscó algo, se reemplaza
+                contenido = self.bloque_codigo.get('1.0', tk.END)
+                contenido_nuevo = contenido.replace(objetivo, nuevo)
+                
+                self.bloque_codigo.delete('1.0', tk.END)
+                self.bloque_codigo.insert('1.0', contenido_nuevo)
+                
+            ventana.destroy() #ciera la ventana después de reemplazar
+        #boton para ejecutar el reemplazo
+        tk.Button(ventana, text="Reemplazar Todo", command=ejecutar_reemplazo, bg='#d0e0f0').pack(pady=20)
+    
+    def resaltar_sintaxis(self, event=None): #funcion para resaltar ciertas sintaxis
+        for tag in ["reservada", "string", "numero"]:
+            self.bloque_codigo.tag_remove(tag, '1.0', tk.END)
+        
+        reservadas = ["def", "end", "if", "else", "elsif", "while", "for", "in", 
+                      "return", "puts", "begin", "case", "when"]
+
+        for palabra in reservadas: #resalta las palabras reservadas
+            inicio = '1.0'
+            while True:
+                inicio = self.bloque_codigo.search(rf'\m{palabra}\M', inicio, stopindex=tk.END, regexp=True)
+                if not inicio:
+                    break
+                fin = f"{inicio}+{len(palabra)}c"
+                self.bloque_codigo.tag_add("reservada", inicio, fin)
+                inicio = fin
+
+        inicio = '1.0' 
+        while True: #para resaltar los numeros
+            inicio = self.bloque_codigo.search(r"\m\d+\M", inicio, stopindex=tk.END, regexp=True)
+            if not inicio:
+                break
+            match_str = self.bloque_codigo.get(inicio, f"{inicio} wordend")
+            num_len = len(''.join(filter(str.isdigit, match_str)))
+            fin = f"{inicio}+{num_len}c"
+            self.bloque_codigo.tag_add("numero", inicio, fin)
+            inicio = fin
+
+
+
 
 if __name__ == "__main__":
     app = Compilador()

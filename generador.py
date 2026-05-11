@@ -157,3 +157,15 @@ class GeneradorCodigo:
             self.codigo.append(f"Aumentar iterador (inc): {nombre_var}")
             self.codigo.append("Saltar al inicio del For (jmp)")
             self.codigo.append("-- Fin del bucle For --")
+
+        elif tipo == 'PalabraReservada' and valor == 'do_while':
+            self.codigo.append("-- Inicio del bucle Do-While --")
+            self.codigo.append("-- Bloque Do-While Verdadero --")
+            
+            self.visitar(nodo.right)
+            
+            self.codigo.append("-- Evaluando Condicion Do-While --")
+            self.visitar(nodo.left) 
+            
+            self.codigo.append("Saltar si verdadero al inicio del Do-While (jmpt)")
+            self.codigo.append("-- Fin del bucle Do-While --")

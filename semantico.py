@@ -275,5 +275,14 @@ class Semantico:
             if tipo_rango not in ['rango', 'array_int']:
                 self.errores.append((f"Error semántico: El rango del 'for' debe ser un rango de enteros o un arreglo de enteros, no '{tipo_rango}'.", linea))
                 return ('Error', 0)
+            
+        elif tipo_token == 'PalabraReservada' and valor == 'do_while':
+            self.visitar(nodo.right)
+
+            tipo_condicion, _ = self.visitar(nodo.left) #visitar la condición del do-while
+            if tipo_condicion != 'Error' and tipo_condicion != 'Booleano':
+                self.errores.append((f"Error semántico: Condición del 'do-while' debe ser de tipo 'Booleano', no '{tipo_condicion}'.", linea))
+
+            return ('None', 0)
 
         return ('None', 0)

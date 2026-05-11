@@ -76,7 +76,6 @@ palabrasReservadas = {  # palabras reservadas básicas de Ruby
     "super": "llamada al método de la superclase",
     "self": "referencia al objeto actual",
     "alias": "crear alias de método o variable",
-    "defined?": "verificar si algo está definido",
     "and": "operador lógico and",
     "or": "operador lógico or",
     "not": "operador lógico not",

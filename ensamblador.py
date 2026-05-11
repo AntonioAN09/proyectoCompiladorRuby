@@ -10,6 +10,9 @@ class Ensamblador:
         self.cont_while = 0
         self.stack_while = []
 
+        self.cont_do_while = 0
+        self.stack_do_while = []
+
         self.iterador_actual = ""
 
     def nueva_etiqueta(self, prefijo):
@@ -240,3 +243,19 @@ class Ensamblador:
 
         elif inst.startswith("Llamar propiedad/método: length") or inst.startswith("Llamar propiedad/método: size"):
             self.codigo_asm.append("    push dword 4    ; Forzamos el tamaño del arreglo a 4 (Bubble Sort)")
+
+        # --- ESTRUCTURAS DE CONTROL: DO-WHILE ---
+        elif inst == "-- Inicio del bucle Do-While --":
+            self.cont_do_while += 1
+            etiq_inicio = f"INICIO_DO_WHILE_{self.cont_do_while}"
+            self.stack_do_while.append(etiq_inicio)
+            self.codigo_asm.append(f"{etiq_inicio}:")
+            
+        elif inst == "Saltar si verdadero al inicio del Do-While (jmpt)":
+            etiq_inicio = self.stack_do_while.pop()
+            self.codigo_asm.append("    pop eax         ; Sacamos el resultado de la condicion")
+            self.codigo_asm.append("    cmp eax, 1      ; ¿Es verdadero (1)?")
+            self.codigo_asm.append(f"    je {etiq_inicio}    ; Repetir bucle si es verdadero")
+            
+        elif inst == "-- Fin del bucle Do-While --":
+            pass # No necesitamos etiqueta de fin explícita, si es falso simplemente sigue de largo
